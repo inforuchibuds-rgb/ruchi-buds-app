@@ -192,3 +192,11 @@ table.ticks.lines td input, table.ticks.lines td select { min-height: 40px; }
 @media print {
   .banner, .training-strip, .actions, .tabs { display: none !important; }
 }
+
+/* ---------- stock and production (module 4) ---------- */
+.switch { display: inline-flex; flex-wrap: wrap; gap: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; margin-bottom: .75rem; }
+.switch button { border: 0; border-radius: 0; background: #FFF; color: var(--brown); padding: .5rem .9rem; min-height: 40px; font-weight: 600; cursor: pointer; }
+.switch button + button { border-left: 1px solid var(--line); }
+.switch button.on { background: var(--ruchi-red); color: #FFF; }
+tr.row-expired td, .tabulator-row.row-expired { background: #FDECEC !important; color: var(--error); }
+.modal h3, .card h3 { margin: 1rem 0 .4rem; font-size: 1rem; }
