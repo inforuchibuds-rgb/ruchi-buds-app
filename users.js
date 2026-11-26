@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · users.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · users.js · Version 1.1 · 26-Nov-2026
 // Users, categories with the screen x action tick grid, per-user ticks,
 // password resets and unlocks, and the audit log screen.
 // =====================================================================
@@ -358,10 +358,15 @@
   const TABLE_NAMES = {
     app_users: 'Users', user_categories: 'Categories', category_access: 'Access grid',
     user_access_overrides: 'Per-user ticks', app_settings: 'Settings', password_reset_requests: 'Password resets',
+    // module 2
+    units: 'Units', items: 'Items', pack_types: 'Pack types', product_packs: 'Product packs', customers: 'Customers',
+    suppliers: 'Suppliers', departments: 'Departments', dept_events: 'Department renames and merges', accounts: 'Chart of accounts',
+    posting_rules: 'Posting rules', periods: 'Month lock', entities: 'Group entities', journals: 'Journals',
   };
   const ACTION_NAMES = {
     INSERT: 'Added', UPDATE: 'Changed', DELETE: 'Deleted', LOGIN: 'Signed in', LOGIN_FAILED: 'Wrong password',
     PASSWORD_RESET: 'Password reset', PASSWORD_CHANGED: 'Changed own password', REMOVE_DEMO: 'Removed demo data',
+    POST_JOURNAL: 'Posted journal', REVERSE_JOURNAL: 'Reversed journal', DELETE_DRAFT: 'Deleted draft journal', IMPORT_COA: 'Imported chart of accounts',
   };
 
   function summarise(r) {
@@ -371,7 +376,7 @@
       return ch.map((k) => k === 'wordmark_url' ? 'word mark changed' : k.replace(/_/g, ' ') + ': ' + fmtVal(r.old_data[k]) + ' → ' + fmtVal(r.new_data[k])).join('; ');
     }
     const d = r.new_data || r.old_data;
-    if (d) return d.full_name || d.name || d.perm || d.email || '';
+    if (d) return [d.journal_no, d.code, d.full_name || d.name || d.new_name || d.perm || d.email || d.narration].filter(Boolean).join(' ') || r.note || '';
     return r.note || '';
   }
   function fmtVal(v) {

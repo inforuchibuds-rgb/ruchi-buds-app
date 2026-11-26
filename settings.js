@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · settings.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · settings.js · Version 1.1 · 26-Nov-2026
 // Firm details, partners and profit share, entry rules, word mark,
 // training mode and go-live, demo data, backups and the keep-awake check.
 // =====================================================================
@@ -56,7 +56,8 @@
       '<section class="card" id="st-backup"></section>';
 
     // partners editor
-    let partners = (s.partners || []).map((p) => ({ name: p.name, weight: p.weight }));
+    // Each partner keeps their number (id), so their capital and current accounts stay linked when names change.
+    let partners = (s.partners || []).map((p) => ({ id: p.id, name: p.name, weight: p.weight }));
     let wordmark = s.wordmark_url;
     const drawPartners = () => {
       $('#st-partners', body).innerHTML = partners.map((p, i) =>

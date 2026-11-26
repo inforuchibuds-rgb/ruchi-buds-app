@@ -98,6 +98,7 @@ async function rest(req, res, url) {
       const vals = keys.map((k) => (args[k] !== null && typeof args[k] === 'object' ? JSON.stringify(args[k]) : args[k]));
       const rows = await asRole(cl, (c) => c.query(sql, vals).then((r) => r.rows));
       const col = (r) => r[Object.keys(r)[0]];
+      if (meta.rows[0].proretset && meta.rows[0].rt === 'record') return send(res, 200, rows);
       if (meta.rows[0].proretset) return send(res, 200, rows.map(col));
       if (meta.rows[0].rt === 'void') return send(res, 200, null);
       return send(res, 200, rows[0] ? col(rows[0]) : null);

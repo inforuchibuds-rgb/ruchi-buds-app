@@ -32,7 +32,7 @@ const BASE = 'http://localhost:8787/';
 
   // Users list
   await page.click('a[href="#/users"]'); await expectText('Demo Director Two'); await shot('03-users'); step('users list');
-  await page.click('#u-add');
+  await page.click('#u-add'); await page.waitForTimeout(150);  // let the form take focus first
   await page.fill('#au-email', 'staff.one@example.com'); await page.fill('#au-name', 'Asha Staff'); await page.fill('#au-short', 'AS');
   await page.selectOption('#au-cat', { label: 'Staff' }); await page.fill('#au-lp', '2027-02-28');
   await page.click('#au button[type=submit]'); await expectText('User added'); await shot('04-user-added');

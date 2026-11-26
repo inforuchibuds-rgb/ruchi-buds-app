@@ -8,9 +8,9 @@ Operations and accounts for Ruchi Buds (entity E002): purchases, stock, producti
 
 | # | Module | Database file | Screens | Status |
 |---|---|---|---|---|
-| 1 | Core and users | `sql/01_core_users.sql` | `core.js`, `users.js`, `settings.js` | Built, awaiting sign-off |
-| 2 | Masters, COA and ledger | `02_masters.sql` | `masters.js` | Next |
-| 3 | Purchases and AP | `03_purchases.sql` | `purchases.js` | |
+| 1 | Core and users | `sql/01_core_users.sql` | `core.js`, `users.js`, `settings.js` | Signed off |
+| 2 | Masters, COA and ledger | `sql/02_masters.sql` | `masters.js`, `accounts.js` | Built, awaiting sign-off |
+| 3 | Purchases and AP | `03_purchases.sql` | `purchases.js` | Next |
 | 4 | Stock and production | `04_stock_production.sql` | `stock.js` | |
 | 5 | Sales, invoices and AR | `05_sales_invoices.sql` | `sales.js`, `invoices.js` | |
 | 6 | Cash, bank and expenses | `06_cash_bank.sql` | `cashbank.js` | |
@@ -23,6 +23,10 @@ Operations and accounts for Ruchi Buds (entity E002): purchases, stock, producti
 
 - [Module 1 setup guide](docs/module-1-setup-guide.md)
 - [Module 1 test checklist](docs/module-1-test-checklist.md)
+- [Module 2 setup guide](docs/module-2-setup-guide.md)
+- [Module 2 test checklist](docs/module-2-test-checklist.md)
+
+Run the SQL files in number order. If an earlier file is ever run again, run every later file again straight after it.
 
 ## Rules every module follows
 
@@ -34,4 +38,4 @@ Operations and accounts for Ruchi Buds (entity E002): purchases, stock, producti
 
 ## For developers
 
-`tests/` holds a Supabase stand-in (`supabase_stub.sql`), SQL behaviour tests (`test_core.sql`), a local mock of the Supabase API (`mock-supabase.js`) and a Playwright walk-through (`e2e.js`). Run them against a throwaway local Postgres only. Third-party libraries are copied into `vendor/` (supabase-js 2.119.0, Tabulator 6.3.1, SheetJS 0.18.5) so the app doesn't depend on a CDN; their licences are alongside.
+`tests/` holds a Supabase stand-in (`supabase_stub.sql`), SQL behaviour tests (`test_core.sql`, `test_masters.sql`), a local mock of the Supabase API (`mock-supabase.js`) and Playwright walk-throughs (`e2e.js`, `e2e_masters.js`). Run them against a throwaway local Postgres only. Third-party libraries are copied into `vendor/` (supabase-js 2.119.0, Tabulator 6.3.1, SheetJS 0.18.5) so the app doesn't depend on a CDN; their licences are alongside.
