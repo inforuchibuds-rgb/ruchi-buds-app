@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · masters.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · masters.js · Version 1.1 · 26-Nov-2026
 // Module 2 screens: Masters (items, packs and prices, departments,
 // units), Customers and Suppliers. The Add customer / Add supplier forms
 // are shared, so the Sales and Purchase screens can open them later.
@@ -447,10 +447,14 @@
   // ===================================================================
   RB.screens.suppliers = async (body) => {
     const d = await M.load(['suppliers']);
+    const owed = {};
+    if (RB.purchases && (RB.has('purchases.view') || RB.has('suppliers.view'))) {
+      try { (await RB.rpc('rb_supplier_balances', { p_as_of: RB.today() })).forEach((b) => { owed[b.supplier_id] = b.balance_paise; }); } catch (e) { /* balances are optional here */ }
+    }
     body.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('suppliers.add') ? '<button class="primary" id="su-add">+ Add supplier</button>' : '') +
       '<button id="su-xls">Download to Excel</button></div>' +
-      '<p class="muted">Fishermen, farmers, local shops and companies. Purchases and the supplier ledger come with module 3. Tap a supplier to see or change them.</p><div id="su-grid"></div>';
-    const rows = d.suppliers.map((s) => Object.assign({}, s, { kind_t: SUP_KINDS[s.kind], nobill: s.usually_no_bill ? 'No bill' : '' }));
+      '<p class="muted">Fishermen, farmers, local shops and companies. Tap a supplier to see or change them, or to open their ledger. Purchases and payments are in the Purchases screen.</p><div id="su-grid"></div>';
+    const rows = d.suppliers.map((s) => Object.assign({}, s, { kind_t: SUP_KINDS[s.kind], nobill: s.usually_no_bill ? 'No bill' : '', owed: owed[s.id] == null ? null : owed[s.id] }));
     const grid = RB.grid($('#su-grid', body), [
       { title: 'Code', field: 'code', width: 100 },
       { title: 'Name', field: 'name', minWidth: 220, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
@@ -459,6 +463,7 @@
       { title: 'Bills', field: 'nobill', width: 90 },
       { title: 'GSTIN', field: 'gstin' },
       { title: 'Credit days', field: 'credit_days', hozAlign: 'right' },
+      { title: 'Balance owed', field: 'owed', hozAlign: 'right', headerFilter: false, formatter: (c) => (c.getValue() == null ? '' : RB.rupees(c.getValue())) },
       { title: 'Status', field: 'is_active', formatter: (c) => RB.activeBadge(c.getValue()), headerFilter: false },
     ], rows);
     grid.on('rowClick', (e, row) => M.supplierModal(d.suppliers.find((x) => x.id === row.getData().id), () => RB.route()));
@@ -482,7 +487,10 @@
       '<div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="s-nobill"' + (s.usually_no_bill ? ' checked' : '') + dis + '> Usually gives no bill (e.g. fishermen)</label></div></div>' +
       RB.field('s-notes', 'Notes', RB.inp('s-notes', s.notes, dis)) +
       (isNew ? '' : '<label class="check"><input type="checkbox" id="s-active"' + (s.is_active ? ' checked' : '') + dis + '> Active</label>') +
-      '<div class="actions">' + (edit ? '<button class="primary" id="s-save">Save</button>' : '') + '<button data-close>Close</button></div>', { wide: true });
+      '<div class="actions">' + (edit ? '<button class="primary" id="s-save">Save</button>' : '') +
+      (!isNew && RB.purchases && RB.has('purchases.view') ? '<button id="s-ledger">Ledger</button>' : '') + '<button data-close>Close</button></div>', { wide: true });
+    const lg = $('#s-ledger', m.el);
+    if (lg) lg.addEventListener('click', () => { m.close(); RB.purchases.ledgerModal(s.id, s.name); });
     const b = $('#s-save', m.el);
     if (b) b.addEventListener('click', async () => {
       const v = (id) => $('#' + id, m.el).value;
