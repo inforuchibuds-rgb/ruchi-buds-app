@@ -32,6 +32,10 @@
 
 update screens set available = true where code in ('purchases', 'suppliers');
 
+-- The day the firm's GST registration starts. Bills dated on or after it
+-- claim input GST; earlier bills add GST to the cost of stock.
+alter table app_settings add column if not exists gst_registered_from date;
+
 do $$
 begin
   -- New right: settle money differences on purchases. Given once to every
@@ -103,6 +107,9 @@ create table if not exists purchases (
   updated_at          timestamptz,
   updated_by          uuid
 );
+-- Whether this purchase's GST went to input credit (fixed when the bill posts,
+-- so later debit notes and returns undo it the same way).
+alter table purchases add column if not exists gst_claimed boolean;
 create index if not exists purchases_supplier_idx on purchases (supplier_id);
 create index if not exists purchases_status_idx on purchases (status);
 
@@ -351,11 +358,35 @@ begin
   return round(p_qty * v_u.to_base / v_b.to_base, 3);
 end $$;
 
--- GST is recoverable only when the firm is registered (GSTIN in Settings).
-create or replace function rb_pur_gst_claimable()
+-- GST is recoverable only on bills dated on or after the firm's GST
+-- registration (GSTIN and "registered from" date in Settings).
+drop function if exists rb_pur_gst_claimable();
+create or replace function rb_pur_gst_claimable(p_date date)
 returns boolean language sql stable security definer set search_path = public as $$
-  select coalesce((select gstin is not null and trim(gstin) <> '' from app_settings where id = 1), false)
+  select coalesce((select gstin is not null and trim(gstin) <> '' and gst_registered_from is not null
+                          and p_date is not null and p_date >= gst_registered_from
+                     from app_settings where id = 1), false)
 $$;
+
+-- Set the GST registration: GSTIN and the date it starts. Clearing the GSTIN
+-- clears the date. Bills already entered keep the treatment they had.
+create or replace function rb_set_gst_registration(p_gstin text, p_from date)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_me uuid := rb_require('settings.edit', 'change settings'); v_old jsonb; v_g text := nullif(upper(trim(p_gstin)), '');
+begin
+  if v_g is not null and p_from is null then
+    raise exception 'Enter the date the GST registration starts (the "effective date" on the GST certificate).';
+  end if;
+  if v_g is not null and v_g !~ '^[0-9]{2}[A-Z0-9]{13}$' then
+    raise exception 'A GSTIN has 15 letters and digits, starting with the 2-digit state code.';
+  end if;
+  select jsonb_build_object('gstin', gstin, 'gst_registered_from', gst_registered_from) into v_old from app_settings where id = 1;
+  update app_settings set gstin = v_g, gst_registered_from = case when v_g is null then null else p_from end where id = 1;
+  if v_old is distinct from jsonb_build_object('gstin', v_g, 'gst_registered_from', case when v_g is null then null else p_from end) then
+    perform rb_audit_write('GST_REGISTRATION', 'app_settings', '1', v_old,
+      jsonb_build_object('gstin', v_g, 'gst_registered_from', case when v_g is null then null else p_from end), null);
+  end if;
+end $$;
 
 -- The stock rule for an item: raw materials or packaging.
 create or replace function rb_pur_stock_key(p_item int)
@@ -554,10 +585,12 @@ end $$;
 create or replace function rb_pur_post_bill(p_id bigint, p_actor uuid)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_p purchases; l record; v_lines jsonb := '[]'; v_grni bigint; v_var bigint; v_gst_total bigint := 0;
-        v_total bigint := 0; v_j bigint; v_claim boolean := rb_pur_gst_claimable(); v_sup text; v_key text;
+        v_total bigint := 0; v_j bigint; v_claim boolean; v_sup text; v_key text;
         v_grni_total bigint := 0;
 begin
   select * into v_p from purchases where id = p_id;
+  v_claim := rb_pur_gst_claimable(v_p.bill_date);
+  update purchases set gst_claimed = v_claim where id = p_id;
   select name into v_sup from suppliers where id = v_p.supplier_id;
   for l in select pl.*,
              coalesce((select sum(value_paise) from purchase_grn_lines g where g.purchase_line_id = pl.id), 0)
@@ -816,10 +849,12 @@ end $$;
 -- Post a direct purchase: goods in and the bill in one journal, then the payment if paid now.
 create or replace function rb_pur_post_direct(p_id bigint, p_actor uuid, p_approver uuid)
 returns void language plpgsql security definer set search_path = public as $$
-declare v_p purchases; v_g purchase_grns; l purchase_lines; v_lines jsonb := '[]'; v_claim boolean := rb_pur_gst_claimable();
+declare v_p purchases; v_g purchase_grns; l purchase_lines; v_lines jsonb := '[]'; v_claim boolean;
         v_gst bigint := 0; v_total bigint := 0; v_val bigint; v_j bigint; v_sup text;
 begin
   select * into v_p from purchases where id = p_id for update;
+  v_claim := rb_pur_gst_claimable(coalesce(v_p.bill_date, v_p.purchase_date));
+  update purchases set gst_claimed = v_claim where id = p_id;
   select * into v_g from purchase_grns where purchase_id = p_id order by id limit 1;
   select name into v_sup from suppliers where id = v_p.supplier_id;
   perform rb_assert_period_open(v_p.purchase_date);
@@ -959,10 +994,11 @@ end $$;
 create or replace function rb_pur_debit_note(p_purchase bigint, p_line bigint, p_disc bigint, p_date date,
                                              p_taxable bigint, p_gst bigint, p_reason text, p_actor uuid)
 returns bigint language plpgsql security definer set search_path = public as $$
-declare v_p purchases; v_l purchase_lines; v_no text; v_id bigint; v_j bigint; v_claim boolean := rb_pur_gst_claimable();
+declare v_p purchases; v_l purchase_lines; v_no text; v_id bigint; v_j bigint; v_claim boolean;
         v_stock bigint; v_lines jsonb; v_sup text;
 begin
   select * into v_p from purchases where id = p_purchase;
+  v_claim := coalesce(v_p.gst_claimed, false);
   select * into v_l from purchase_lines where id = p_line;
   select name into v_sup from suppliers where id = v_p.supplier_id;
   if coalesce(p_taxable, 0) + coalesce(p_gst, 0) <= 0 then raise exception 'There is nothing to claim back from the supplier here.'; end if;
@@ -996,10 +1032,11 @@ create or replace function rb_pur_return(p jsonb, p_actor uuid, p_disc bigint)
 returns bigint language plpgsql security definer set search_path = public as $$
 declare v_p purchases; v_date date := (p->>'return_date')::date; v_id bigint; v_no text; l jsonb; v_l purchase_lines;
         v_qty numeric; v_rate bigint; v_val bigint; v_gst bigint; v_after boolean; v_from boolean := coalesce((p->>'from_stock')::boolean, true);
-        v_claim boolean := rb_pur_gst_claimable(); v_lines jsonb := '[]'; v_tax bigint := 0; v_gst_t bigint := 0; v_stock_t bigint := 0;
+        v_claim boolean; v_lines jsonb := '[]'; v_tax bigint := 0; v_gst_t bigint := 0; v_stock_t bigint := 0;
         v_j bigint; v_sup text; v_n int := 0; r record;
 begin
   select * into v_p from purchases where id = rb_int(p, 'purchase_id') for update;
+  v_claim := coalesce(v_p.gst_claimed, false);
   if v_p.id is null then raise exception 'Purchase not found.'; end if;
   if v_p.status in ('cancelled', 'refused', 'awaiting_approval') then raise exception 'Only a posted purchase can have a return.'; end if;
   if rb_txt(p, 'reason') is null then raise exception 'Please give the reason for the return.'; end if;
@@ -1472,7 +1509,7 @@ begin
                from payment_allocations a join supplier_payments sp on sp.id = a.payment_id where a.purchase_id = p_id), '[]'),
     'photos', coalesce((select jsonb_agg(jsonb_build_object('id', ph.id, 'caption', ph.caption, 'added_at', ph.added_at) order by ph.id)
                from purchase_photos ph where ph.purchase_id = p_id), '[]'),
-    'gst_claimable', rb_pur_gst_claimable(),
+    'gst_claimable', coalesce(v_p.gst_claimed, rb_pur_gst_claimable(coalesce(v_p.bill_date, v_p.purchase_date, current_date))),
     'can', jsonb_build_object(
        'edit_order', rb_has('purchases.edit') and not v_p.is_direct and v_p.status = 'ordered',
        'receive', rb_has('purchases.add') and not v_p.is_direct and v_p.bill_posted_at is null and v_p.status not in ('cancelled', 'refused'),
@@ -1663,7 +1700,7 @@ begin
                'rb_purchase_photo','rb_settle_discrepancy','rb_return_to_supplier','rb_pay_supplier','rb_allocate_payment',
                'rb_reverse_purchase','rb_reverse_supplier_payment','rb_hard_delete_purchase','rb_hard_delete_supplier_payment',
                'rb_purchase_detail','rb_supplier_balances','rb_supplier_ledger','rb_open_discrepancies',
-               'rb_supplier_discrepancy_report','rb_direct_purchase_report','rb_stock_on_hand')) loop
+               'rb_supplier_discrepancy_report','rb_direct_purchase_report','rb_stock_on_hand','rb_set_gst_registration')) loop
     execute format('revoke execute on function %s from public, anon, authenticated', f.sig);
     execute format('grant execute on function %s to service_role', f.sig);
   end loop;
@@ -1677,7 +1714,7 @@ grant execute on function
   rb_hard_delete_purchase(bigint), rb_hard_delete_supplier_payment(bigint),
   rb_purchase_detail(bigint), rb_supplier_balances(date, boolean), rb_supplier_ledger(int, date, date),
   rb_open_discrepancies(), rb_supplier_discrepancy_report(date, date), rb_direct_purchase_report(date, date),
-  rb_stock_on_hand(date)
+  rb_stock_on_hand(date), rb_set_gst_registration(text, date)
   to authenticated;
 
 -- ---------------------------------------------------------------------

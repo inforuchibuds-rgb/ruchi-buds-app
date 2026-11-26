@@ -229,6 +229,8 @@ select t_ok((select status from purchases where id = :dp4) = 'refused', 'Second 
 -- 8. GST registered: input GST becomes recoverable
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
 select rb_save_settings('{"gstin": "27AAAAA0000A1Z5", "direct_purchase_approval_limit_paise": 300000}');
+reset role; select t_ok(not rb_pur_gst_claimable('2026-11-25'), 'A GSTIN with no start date claims nothing yet'); set role authenticated;
+select rb_set_gst_registration('27AAAAA0000A1Z5', '2026-11-01');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b1', false);
 select t_bal('10050105') as gst_before \gset
 select rb_save_purchase_order(jsonb_build_object('supplier_id', :sup, 'po_date', '2026-11-25', 'lines', jsonb_build_array(
@@ -285,6 +287,36 @@ select t_err($$select rb_save_direct_purchase(jsonb_build_object('supplier_id', 
   'is locked');
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
 select rb_lock_period('2026-10-01', false, 'Reopened for the test');
+
+-- 12b. GST registration moves to a later date: GST goes to cost before it, to input credit from it
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000b1', false);
+select t_err($$select rb_set_gst_registration('27ABCDE1234F1Z5', '2026-11-26')$$, 'change settings');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
+select t_err($$select rb_set_gst_registration('27ABCDE1234F1Z5', null)$$, 'date the GST registration starts');
+select t_err($$select rb_set_gst_registration('27ABC', '2026-11-26')$$, '15 letters');
+select rb_set_gst_registration('27abcde1234f1z5', '2026-11-26');
+select t_bal('10050105') as itc0 \gset
+select rb_save_direct_purchase(jsonb_build_object('supplier_id', :sup, 'purchase_date', '2026-11-25', 'reason', 'Before GST',
+  'payment_mode', 'credit', 'bill_no', 'TS-G1', 'lines', jsonb_build_array(jsonb_build_object('item_id', :jar, 'qty', 10, 'rate_paise', 2000, 'gst_paise', 3600)))) as g1 \gset
+select t_ok((select gstin from app_settings) = '27ABCDE1234F1Z5' and (select gst_registered_from from app_settings) = '2026-11-26', 'GSTIN and its start date saved');
+select rb_save_direct_purchase(jsonb_build_object('supplier_id', :sup, 'purchase_date', '2026-11-25', 'reason', 'Bill before the date',
+  'payment_mode', 'credit', 'bill_no', 'TS-G2', 'lines', jsonb_build_array(jsonb_build_object('item_id', :jar, 'qty', 10, 'rate_paise', 2000, 'gst_paise', 3600)))) as g2 \gset
+select rb_save_direct_purchase(jsonb_build_object('supplier_id', :sup, 'purchase_date', '2026-11-26', 'reason', 'Bill from the date',
+  'payment_mode', 'credit', 'bill_no', 'TS-G3', 'lines', jsonb_build_array(jsonb_build_object('item_id', :jar, 'qty', 10, 'rate_paise', 2000, 'gst_paise', 3600)))) as g3 \gset
+select t_ok(not (select gst_claimed from purchases where id = :g1) and not (select gst_claimed from purchases where id = :g2),
+            'Bills dated before the registration date add GST to stock cost');
+select t_ok((select gst_claimed from purchases where id = :g3) and t_bal('10050105') = :itc0 + 3600, 'A bill dated from the registration date claims the GST');
+select t_ok((select sum(value_paise) from stock_moves where purchase_id = :g2) = 23600 and (select sum(value_paise) from stock_moves where purchase_id = :g3) = 20000,
+            'Stock carries GST only when it cannot be claimed (AS 2)');
+select rb_return_to_supplier(jsonb_build_object('purchase_id', :g1, 'return_date', '2026-11-26', 'reason', 'Cracked',
+  'lines', jsonb_build_array(jsonb_build_object('line_id', (select id from purchase_lines where purchase_id = :g1), 'qty', 5))));
+select rb_return_to_supplier(jsonb_build_object('purchase_id', :g3, 'return_date', '2026-11-26', 'reason', 'Cracked',
+  'lines', jsonb_build_array(jsonb_build_object('line_id', (select id from purchase_lines where purchase_id = :g3), 'qty', 5))));
+select t_ok(t_bal('10050105') = :itc0 + 1800 and (select sum(value_paise) from stock_moves where purchase_id = :g1) = 11800,
+            'Returns undo GST the way the bill booked it, whatever the registration is now');
+select t_ok(t_books_agree(), 'Books agree across the GST registration date');
+select rb_set_gst_registration('', null);
+select t_ok((select gstin from app_settings) is null and (select gst_registered_from from app_settings) is null, 'Clearing the GSTIN clears its date');
 
 -- 13. Reports and the purchase window
 select t_ok((select count(*) from rb_open_discrepancies()) = 3, 'Open differences list (DEMO ones still open)');

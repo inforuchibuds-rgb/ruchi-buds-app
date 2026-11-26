@@ -47,6 +47,7 @@ Tick each line on the real app before signing off module 3. You need DS's login 
 - [ ] On a paid purchase, **Reverse purchase** is refused until its payment is reversed (Payments tab → tap the payment → Reverse payment).
 - [ ] In **Accounts and journals**, try to reverse a purchase journal. It is refused ("Reverse it there").
 - [ ] **Accounts → Trial balance**: debits equal credits; Goods received not invoiced (30010115) is zero once every received purchase is billed.
+- [ ] Open a billed purchase with GST: the window shows **GST: Added to stock cost** (no GSTIN yet). In Settings, typing a GSTIN without a **GST registered from** date is refused; clear the GSTIN again afterwards.
 - [ ] Lock last month in Accounts → Month lock, then try to enter a direct purchase dated in it. It is refused. Unlock it again.
 
 ## F. Learning phase and audit

@@ -23,7 +23,10 @@
       ['Partnership', 'LLP'].map((v) => '<option' + (s.legal_form === v ? ' selected' : '') + '>' + v + '</option>').join('') + '</select>' +
       '<div class="hint">Switch to LLP when the firm converts. Past entries stay as they are.</div></div></div>' +
       '<div class="row">' + inp('firm_reg_no', 'Firm Reg. no.', s.firm_reg_no) + inp('llpin', 'LLPIN (after LLP)', s.llpin) + inp('fssai_no', 'FSSAI no.', s.fssai_no) + '</div>' +
-      '<div class="row">' + inp('gstin', 'GSTIN (if registered)', s.gstin) + inp('state_code', 'State code', s.state_code) + '</div>' +
+      '<div class="row">' + inp('gstin', 'GSTIN (if registered)', s.gstin) +
+      '<div class="field"><label for="st-gstfrom">GST registered from</label><input id="st-gstfrom" type="date" value="' + esc(s.gst_registered_from || '') + '"' + dis + '>' +
+      '<div class="hint">The effective date on the GST certificate. Purchase bills dated from this day claim GST back; earlier bills add GST to the cost of stock.</div></div>' +
+      inp('state_code', 'State code', s.state_code) + '</div>' +
       '<div class="field"><label for="st-address">Registered address</label><textarea id="st-address"' + dis + '>' + esc(s.address || '') + '</textarea></div>' +
       '<div class="row">' + inp('phone', 'Phone', s.phone) + inp('email', 'Email', s.email) + '</div>' +
       '<div class="row"><div class="field"><label>Entity code</label><input value="' + esc(s.entity_code) + '" disabled><div class="hint">Group code from the Master COA.</div></div>' +
@@ -94,6 +97,7 @@
         const limit = v('dplimit');
         try {
           if (partners.some((p) => !p.name || !(p.weight > 0))) throw new Error('Each partner needs a name and a share above zero.');
+          if (v('gstin').trim() && !v('gstfrom')) throw new Error('Enter the date the GST registration starts (the effective date on the GST certificate).');
           await RB.rpc('rb_save_settings', { p: {
             firm_name: v('firm_name'), legal_form: v('legal'), firm_reg_no: v('firm_reg_no'), llpin: v('llpin'),
             fssai_no: v('fssai_no'), gstin: v('gstin'), state_code: v('state_code'), address: v('address'),
@@ -102,7 +106,8 @@
             direct_purchase_approval_limit_paise: limit === '' ? null : Math.round(Number(limit) * 100),
             failed_login_limit: Number(v('flimit')), wordmark_url: wordmark || '',
           } });
-          RB.cache.settings = Object.assign(RB.cache.settings || {}, { wordmark_url: wordmark || null, firm_name: v('firm_name') });
+          if (v('gstin').trim() || s.gst_registered_from) await RB.rpc('rb_set_gst_registration', { p_gstin: v('gstin'), p_from: v('gstfrom') || null });
+                    RB.cache.settings = Object.assign(RB.cache.settings || {}, { wordmark_url: wordmark || null, firm_name: v('firm_name') });
           const img = $('.banner .wordmark'); if (img) img.src = wordmark || 'assets/wordmark.png';
           $('#st-saved', body).textContent = 'Saved ' + RB.fmtDateTime(new Date());
           RB.toast('Settings saved');
