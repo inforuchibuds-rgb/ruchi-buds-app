@@ -1,0 +1,28 @@
+<!doctype html>
+<!-- RUCHI BUDS APP · index.html (login and home menu) · Version 1.0 · 26-Nov-2026 -->
+<html lang="en-IN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Ruchi Buds</title>
+  <meta name="theme-color" content="#971B1E">
+  <link rel="icon" type="image/png" href="assets/favicon.png">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="vendor/tabulator_simple.min.css">
+  <link rel="stylesheet" href="ruchi.css">
+</head>
+<body>
+  <div id="app"><p style="padding:2rem;text-align:center">Loading Ruchi Buds…</p></div>
+  <div id="toast" class="hidden" role="status" aria-live="polite"></div>
+
+  <script src="vendor/supabase.js"></script>
+  <script src="vendor/tabulator.min.js"></script>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="config.js"></script>
+  <script src="core.js"></script>
+  <script src="users.js"></script>
+  <script src="settings.js"></script>
+  <script>RB.start();</script>
+</body>
+</html>
