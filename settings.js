@@ -39,7 +39,7 @@
       TRADER_FIELDS.map(([k, t]) => '<label class="check"><input type="checkbox" data-trader="' + k + '"' + ((s.trader_required_fields || []).includes(k) ? ' checked' : '') + dis + '> ' + t + '</label>').join('') +
       '</div><div class="row">' +
       '<div class="field"><label for="st-dplimit">Direct purchases above this need approval (₹)</label><input id="st-dplimit" type="number" min="0" step="1" value="' +
-      (s.direct_purchase_approval_limit_paise == null ? '' : s.direct_purchase_approval_limit_paise / 100) + '"' + dis + '><div class="hint">Leave blank until you decide. Used from module 3.</div></div>' +
+      (s.direct_purchase_approval_limit_paise == null ? '' : s.direct_purchase_approval_limit_paise / 100) + '"' + dis + '><div class="hint">Only the Accountant, FC or a Director can approve them. Blank means no approval is needed.</div></div>' +
       '<div class="field"><label for="st-flimit">Lock an account after this many wrong passwords</label><input id="st-flimit" type="number" min="3" max="20" value="' + s.failed_login_limit + '"' + dis + '></div>' +
       '</div></section>' +
       // ---- word mark

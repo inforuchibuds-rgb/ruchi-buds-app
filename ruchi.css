@@ -1,5 +1,5 @@
 /* =====================================================================
-   RUCHI BUDS APP · ruchi.css · Version 1.0 · 26-Nov-2026
+   RUCHI BUDS APP · ruchi.css · Version 1.1 · 26-Nov-2026
    Brand colours and the spreadsheet-style look shared by every screen.
    ===================================================================== */
 :root {
@@ -162,6 +162,24 @@ table.ticks .soon { font-size: .75rem; color: var(--muted); font-weight: 400; }
 .login-card { background: var(--white); border-radius: 12px; width: 100%; max-width: 380px; padding: 1.5rem; }
 .login-card h1 { text-align: center; }
 .login-card .links { text-align: center; margin-top: 1rem; font-size: .92rem; }
+
+/* ---------- purchases (module 3) ---------- */
+.diff { color: var(--error); font-weight: 700; }
+table.ticks td.diff { background: #FDECEC; color: var(--error); font-weight: 700; }
+table.ticks td.diff-done { background: #FFF3D6; }
+.diff-count { color: var(--error); font-weight: 700; }
+input.diff-input { border-color: var(--error); background: #FFF6F6; }
+table.match th.grp { border-left: 2px solid var(--line); }
+table.match td:first-child { min-width: 150px; }
+table.ticks.lines td input, table.ticks.lines td select { min-height: 40px; }
+.steps { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .75rem; }
+.steps .step { padding: .2rem .65rem; border-radius: 999px; background: #EEE; color: #666; font-size: .85rem; font-weight: 600; }
+.steps .step.done { background: #E3EEDF; color: var(--leaf); }
+.facts > div, .totals > div { flex: 1 1 150px; }
+.facts small, .totals small { display: block; color: var(--muted); font-size: .78rem; }
+.totals { border-top: 1px solid var(--line); margin-top: .75rem; padding-top: .75rem; }
+.diff-row { border-left: 4px solid var(--error); padding: .4rem .75rem; margin: .5rem 0; background: #FFF9F9; border-radius: 0 6px 6px 0; }
+.diff-row.done { border-left-color: var(--ruchi-yellow); background: #FFFCF5; }
 
 @media (max-width: 600px) {
   main { padding: .75rem; }
