@@ -364,6 +364,7 @@
       (p.is_direct ? '<div><small>Bought on</small>' + RB.fmtDate(p.purchase_date) + '<br><span class="muted">' + esc(p.reason || '') + '</span></div>' : '') +
       '<div><small>Supplier bill</small>' + (billed ? (p.no_supplier_bill ? 'None (ref ' + esc(p.bill_no) + ')' : esc(p.bill_no) + ' · ' + RB.fmtDate(p.bill_date)) : '<span class="muted">not yet</span>') + '</div>' +
       '<div><small>Payment</small>' + esc(MODES[p.payment_mode] || '') + '</div>' +
+      (billed && Number(p.bill_gst_paise) > 0 ? '<div><small>GST</small>' + (p.gst_claimed ? 'Input credit' : 'Added to stock cost<br><span class="muted">not GST registered on the bill date</span>') + '</div>' : '') +
       '<div><small>Department</small>' + esc(p.department || '') + '</div>' +
       '<div><small>Entered by</small>' + esc(p.entered_by_name || '') + (p.approved_by_name && p.approval_needed ? '<br><span class="muted">approved by ' + esc(p.approved_by_name) + '</span>' : '') + '</div>' +
       '</div>' +

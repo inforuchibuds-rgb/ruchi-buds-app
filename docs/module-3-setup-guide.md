@@ -25,7 +25,7 @@ This update takes about 10 minutes. You paste one file into Supabase. GitHub Pag
 |---|---|---|
 | When stock and the supplier balance move | Stock goes up at **GRN**, at the PO rate, against "Goods received not invoiced" (30010115). The supplier balance goes up at the **bill**. | Spec section 6. AS 2: stock is recorded when the goods come in. |
 | Bill differs from the GRN | The difference is added to (or taken off) the cost of the stock. | AS 2: stock carries what it really cost. |
-| GST on bills | If the firm's **GSTIN is filled in Settings**, GST goes to Input GST recoverable (10050105). If it is blank, GST is added to the cost of the stock. | AS 2: tax that cannot be claimed back is part of cost. **Please ask your CA**, then fill or leave the GSTIN. Change it before the first real purchase and keep it. |
+| GST on bills | While the firm has no GSTIN, GST on purchase bills is added to the cost of the stock. Once you register, fill the **GSTIN** and **GST registered from** (the effective date on the GST certificate) in Settings. Bills dated from that day put GST into Input GST recoverable (10050105). Earlier bills keep GST in stock cost, and their returns and debit notes undo it the same way. | AS 2: tax that cannot be claimed back is part of cost. Stock held on the registration day may qualify for a one-time credit: ask your CA, who can book it as a journal. |
 | Who settles differences | Quantity differences at delivery (short, extra, damaged): anyone with **Purchases → Approve** (Manager and up). Money differences (rate, tax, quantity on the bill) and debit notes: only the **Accountant, FC or a Director**, through a new special right **Settle purchase money differences**. AP and staff can see them but not settle them. | Spec section 6: "staff can flag but not settle". |
 | Nobody settles their own entry | The person who entered a purchase cannot settle its differences or approve it, except Directors, the FC and the Accountant. | Spec section 4. |
 | Paying with open differences | A purchase with any open difference cannot be paid. A bill saved as **Cash, UPI or Bank** with differences is refused: save it as **Credit**, settle, then pay. | Spec section 6. |
@@ -61,7 +61,7 @@ The home menu now shows **Purchases** without a "Module 3" label.
 ## Step 4. Settings and access
 
 1. **Settings → Entry rules**: set the **direct purchase approval limit**.
-2. **Settings → Firm details**: fill the **GSTIN** only if the CA confirms the firm is registered (see the GST row above).
+2. **Settings → Firm details**: leave the **GSTIN** blank for now. When the registration comes through, fill the GSTIN and the **GST registered from** date together (see the GST row above).
 3. **Users → Categories and access**: check **Purchases** for each category. By default AP can view, add and edit; Managers can also approve (settle delivery differences); the Accountant has the new special right **Settle purchase money differences**.
 
 ## Files in this module
