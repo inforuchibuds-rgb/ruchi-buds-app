@@ -207,7 +207,8 @@
       if (data.some((x) => x.cost != null)) cols.push(
         { title: 'Cost', field: 'cost', hozAlign: 'right', headerFilter: false, formatter: (c) => amt(c.getValue()), bottomCalc: 'sum', bottomCalcFormatter: (c) => RB.rupees(c.getValue()) },
         { title: 'Margin', field: 'margin', hozAlign: 'right', headerFilter: false, formatter: (c) => amt(c.getValue()), bottomCalc: 'sum', bottomCalcFormatter: (c) => RB.rupees(c.getValue()) },
-        { title: 'Margin %', field: 'margin', hozAlign: 'right', headerFilter: false, formatter: (c) => { const x = c.getRow().getData(); return x.net ? trim(Math.round(1000 * x.margin / x.net) / 10) + '%' : ''; } });
+        { title: 'Margin %', field: 'mpct', hozAlign: 'right', headerFilter: false, formatter: (c) => (c.getValue() == null ? '' : trim(c.getValue()) + '%') });
+      data.forEach((x) => { x.mpct = x.cost != null && x.net > 0 ? Math.round(1000 * x.margin / x.net) / 10 : null; });
       grid = RB.grid($('#ss-grid', tb), cols, data);
     };
     const load = async () => { rows = await RB.rpc('rb_sales_summary', { p_from: $('#ss-from', tb).value, p_to: $('#ss-to', tb).value }); draw(); };

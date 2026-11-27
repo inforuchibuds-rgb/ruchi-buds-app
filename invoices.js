@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · invoices.js · Version 1.0 · 27-Nov-2026
+// RUCHI BUDS APP · invoices.js · Version 1.1 · 27-Nov-2026
 // Module 5 screens "Invoices", "Receipts" and the money side of
 // "Customers": the printable invoice (Print / Save as PDF), returns and
 // credit notes from an invoice, receiving money and setting it against
@@ -95,6 +95,7 @@
       (x.can.return ? '<button id="iw-ret">Goods returned</button>' : '') +
       (x.can.receive ? '<button id="iw-recv">Receive payment</button>' : '') +
       (RB.has('power.refunds') && x.returns.some((r) => r.status === 'posted') ? '<button id="iw-refund">Refund the customer</button>' : '') +
+      (x.can.write_off ? '<button class="danger" id="iw-wo">Write off as bad debt</button>' : '') +
       (RB.has('sales.add') ? '<a class="btn" href="#/sales/new">+ New sale</a>' : '') +
       (x.can.cancel ? '<button class="danger" id="iw-cancel">Cancel invoice</button>' : '') +
       (x.can.delete ? '<button class="danger" id="iw-del">Delete fully (learning phase)</button>' : '') + '</div>' +
@@ -119,7 +120,8 @@
       '<table class="sum"><tr><td>Invoice total</td><td><b>' + RB.rupees(s.total_paise) + '</b></td></tr>' +
       (Number(s.paid_at_sale_paise) ? '<tr><td>Paid at the sale</td><td>' + RB.rupees(s.paid_at_sale_paise) + '</td></tr>' : '') +
       (Number(s.credited_paise) ? '<tr><td>Paid later and credit notes</td><td>' + RB.rupees(s.credited_paise) + '</td></tr>' : '') +
-      (s.status !== 'cancelled' ? '<tr class="grand"><td>' + (owed > 0 ? 'Balance due' : 'Paid in full') + '</td><td>' + (owed > 0 ? RB.rupees(owed) : '✓') + '</td></tr>' : '') + '</table></div>' +
+      (Number(s.written_off_paise) ? '<tr class="no-print"><td>Written off as bad debt</td><td>' + RB.rupees(s.written_off_paise) + '</td></tr>' : '') +
+      (s.status !== 'cancelled' ? '<tr class="grand"><td>' + (owed > 0 ? 'Balance due' : Number(s.written_off_paise) ? 'Closed' : 'Paid in full') + '</td><td>' + (owed > 0 ? RB.rupees(owed) : '✓') + '</td></tr>' : '') + '</table></div>' +
       '<p class="inv-sign">For ' + esc(f.firm_name) + '<br><br><br>Authorised signatory</p>' +
       '<p class="muted inv-small">This is a computer-generated ' + (tax ? 'tax invoice' : 'invoice') + '.</p></div>' +
       '<div class="no-print">' +
@@ -127,6 +129,10 @@
         x.returns.map((r, i) => '<tr data-ret="' + i + '" class="click"><td>' + esc(r.return_no || '(not yet numbered)') + RB.demoBadge(r) + '</td><td>' + RB.fmtDate(r.return_date) + '</td><td>' + esc(r.reason) + '</td><td>' +
           (r.condition === 'restock' ? 'Back on the shelf' : 'Thrown away') + '</td>' + (money() ? '<td style="text-align:right">' + RB.rupees(r.total_paise) + '</td>' : '') +
           '<td>' + RB.badge(SA().RET_BADGE[r.status], SA().RET_STATUS[r.status]) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
+      ((x.write_offs || []).length ? '<div class="card"><h2>Written off as bad debt</h2><table class="ticks lines"><thead><tr><th>Write-off</th><th>Date</th><th>Reason</th><th>Amount</th><th>Recovered</th><th>Status</th></tr></thead><tbody>' +
+        x.write_offs.map((w, i) => '<tr data-wo="' + i + '" class="click"><td>' + esc(w.write_off_no) + RB.demoBadge(w) + '</td><td>' + RB.fmtDate(w.write_off_date) + '</td><td>' + esc(w.reason) + '</td><td style="text-align:right">' +
+          RB.rupees(w.amount_paise) + '</td><td style="text-align:right">' + amt(w.recovered_paise) + '</td><td>' + (w.status === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) + '</td></tr>').join('') +
+        '</tbody></table></div>' : '') +
       (x.payments.length && money() ? '<div class="card"><h2>Payments set against this invoice</h2><table class="ticks lines"><thead><tr><th>Document</th><th>Date</th><th>Amount</th><th>Status</th></tr></thead><tbody>' +
         x.payments.map((p) => '<tr><td>' + esc(p.ref) + (p.kind === 'credit_note' ? ' (credit note)' : '') + '</td><td>' + RB.fmtDate(p.date) + '</td><td style="text-align:right">' + RB.rupees(p.amount_paise) + '</td><td>' +
           (p.status === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) + '</td></tr>').join('') + '</tbody></table></div>' : '') +
@@ -137,6 +143,12 @@
     on(body, '#iw-print', () => window.print());
     on(body, '#iw-ret', () => returnFromInvoice(x, reload));
     on(body, '#iw-recv', () => I.receiveModal({ customer_id: s.customer_id, sale_id: s.id }, reload));
+    on(body, '#iw-wo', () => I.writeOffModal({ customer_id: s.customer_id, customer_name: s.bill_name, sale_id: s.id, invoice_no: s.invoice_no, owed }, reload));
+    $$('[data-wo]', body).forEach((tr) => tr.addEventListener('click', async () => {
+      const w = x.write_offs[Number(tr.dataset.wo)];
+      const full = (await RB.rpc('rb_bad_debts_list')).find((z) => z.id === w.id);
+      if (full) I.badDebtModal(full, reload);
+    }));
     on(body, '#iw-refund', () => { const r = x.returns.filter((z) => z.status === 'posted').pop(); I.refundModal({ customer_id: s.customer_id, return_id: r.id }, reload); });
     on(body, '#iw-cancel', () => SA().reverseModal('Cancel ' + s.invoice_no,
       'The invoice stays in the list marked Cancelled, its number is not used again, the goods go back into stock and the books are reversed on the date below.',
@@ -212,8 +224,10 @@
       items = x.invoices.map((v) => ({ sale_id: v.id, label: v.invoice_no, date: v.invoice_date, due: v.due_date, owed: Number(v.outstanding_paise), is_demo: v.is_demo }));
       if (Number(x.other_balance_paise) > 0) items.unshift({ sale_id: null, label: 'Earlier balance (not on an invoice)', date: null, owed: Number(x.other_balance_paise) });
       let left = al ? al.left : null;
+      const wo = (x.write_offs || []).reduce((t, w) => t + Number(w.left_paise), 0);
       box.innerHTML = '<p>Owed in the books: <b>' + RB.rupees(x.balance_paise) + '</b>' + (Number(x.on_account_paise) > 0 && !al ? ' · already on account: ' + RB.rupees(x.on_account_paise) +
         ' (use the Receipts list to set it against invoices)' : '') + '</p>' +
+        (wo > 0 && !al ? '<div class="msg info">' + RB.rupees(wo) + ' of this customer\'s debt is written off as bad. Money paid towards it: save it here (it stays on account), then book it in Customer receipts → Bad debts → Book money recovered.</div>' : '') +
         (!items.length ? '<p class="muted">Nothing open for this customer' + (al ? '.' : '. Money received now is kept on account (an advance).') + '</p>' :
           '<div class="grid-wrap"><table class="ticks lines"><thead><tr><th>Invoice</th><th>Date</th><th>Due</th><th>Owed</th><th>Set against now ₹</th></tr></thead><tbody>' +
           items.map((v, i) => {
@@ -291,6 +305,7 @@
     on(document, '#rp-recv', () => I.receiveModal({}));
     on(document, '#rp-ref', () => I.refundModal({}));
     const list = [['list', 'Receipts and refunds', receiptsTab], ['balances', 'Customer balances', I.balancesTab]];
+    if (money()) list.push(['bad', 'Bad debts', badDebtsTab]);
     body.innerHTML = '<div class="tabs">' + list.map(([k, t]) => '<button data-tab="' + k + '">' + t + '</button>').join('') + '</div><div id="tab-body"></div>';
     const show = async (k) => {
       I.rtab = k;
@@ -375,7 +390,7 @@
 
   // ---------- statement (screen, print and the public link) ----------
   const EVENTS = { sale: 'Invoice', sale_cancel: 'Cancelled', sales_return: 'Credit note', customer_receipt: 'Payment', customer_refund: 'Refund',
-    opening: 'Opening balance', manual: 'Adjustment', reversal: 'Reversal' };
+    opening: 'Opening balance', manual: 'Adjustment', reversal: 'Reversal', bad_debt: 'Written off', bad_debt_recovery: 'Recovered' };
   I.statementHtml = (st) => {
     const f = st.firm || {}, c = st.customer || {};
     return '<div class="invoice statement">' + firmHead(f, { text: 'STATEMENT OF ACCOUNT' }) +
@@ -445,6 +460,102 @@
     } catch (e) {
       $('#page').innerHTML = '<div class="login-wrap"><img class="wordmark" src="assets/wordmark.png" alt="Ruchi Buds"><div class="login-card"><p>' + esc(e.message) + '</p></div></div>';
     }
+  };
+
+  // ===================================================================
+  // Bad debts: written off by the FC or a Director, recovered later
+  // ===================================================================
+  async function badDebtsTab(tb) {
+    const rows = await RB.rpc('rb_bad_debts_list');
+    const can = RB.has('power.write_off_debts');
+    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (can ? '<button id="bd-new">Write off an earlier balance</button>' : '') + '<button id="bd-xls">Download to Excel</button></div>' +
+      '<p class="muted">Money a customer will not pay, taken off their balance and charged to Bad Debt Write-offs. To write off an invoice, open it and press <b>Write off as bad debt</b>. ' +
+      'If the customer pays later, first enter the money as a receipt, then tap the write-off here and press <b>Book money recovered</b> (it counts as other income).</p><div id="bd-grid"></div>';
+    const grid = RB.grid($('#bd-grid', tb), [
+      { title: 'Write-off', field: 'write_off_no', width: 180, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
+      { title: 'Date', field: 'write_off_date', width: 115, formatter: (c) => RB.fmtDate(c.getValue()) },
+      { title: 'Customer', field: 'customer_name', minWidth: 180 },
+      { title: 'Invoice', field: 'invoice_no', width: 180, formatter: (c) => esc(c.getValue() || 'Earlier balance') },
+      { title: 'Reason', field: 'reason', minWidth: 200 },
+      { title: 'Written off', field: 'amount_paise', hozAlign: 'right', headerFilter: false, formatter: (c) => RB.rupees(c.getValue()) },
+      { title: 'Recovered', field: 'recovered_paise', hozAlign: 'right', headerFilter: false, formatter: (c) => amt(c.getValue()) },
+      { title: 'Status', field: 'status', width: 110, formatter: (c) => (c.getValue() === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) },
+    ], rows);
+    grid.on('rowClick', (e, row) => I.badDebtModal(row.getData(), () => badDebtsTab(tb)));
+    on(tb, '#bd-xls', () => RB.downloadExcel(grid, 'Bad debts'));
+    on(tb, '#bd-new', () => I.writeOffModal({}, () => badDebtsTab(tb)));
+  }
+
+  // o: { customer_id, customer_name, sale_id, invoice_no, owed } — no sale_id = an earlier balance
+  I.writeOffModal = async (o, done) => {
+    const inv = !!o.sale_id;
+    const custs = inv ? [] : (await RB.select('customers', 'id,name,is_walk_in', (x) => x.order('name'))).filter((c) => !c.is_walk_in);
+    const m = RB.modal('<h2>Write off as bad debt' + (inv ? ': ' + esc(o.invoice_no) : '') + '</h2><div class="m-msg"></div>' +
+      '<p class="muted">Only when the money cannot be collected (for example the customer has closed down). The amount comes off the customer\'s balance and is charged to Bad Debt Write-offs. It can be reversed, and money paid later can be booked as recovered.</p>' +
+      '<div class="row">' + (inv ? '<div class="field"><label>Customer</label><p>' + esc(o.customer_name) + '</p></div>'
+        : RB.field('wo-cust', 'Customer', RB.sel('wo-cust', [['', 'Choose…']].concat(custs.map((c) => [c.id, c.name]))), '<span id="wo-left"></span>', true)) +
+      RB.field('wo-date', 'Date', '<input type="date" id="wo-date" value="' + RB.today() + '">', null, true) +
+      RB.field('wo-amt', 'Amount (₹)', RB.inp('wo-amt', inv ? RB.fromPaise(o.owed) : '', ' inputmode="decimal"'), inv ? 'Still owed on the invoice: ' + RB.rupees(o.owed) : 'Only a balance that is not on an invoice in the app (such as an opening balance).', true) + '</div>' +
+      RB.field('wo-why', 'Reason', '<textarea id="wo-why" placeholder="e.g. shop closed, owner not reachable after three reminders"></textarea>', null, true) +
+      '<div class="actions"><button class="danger" id="wo-go">Write off</button><button data-close>Cancel</button></div>');
+    on(m.el, '#wo-cust', async () => {
+      const c = Number($('#wo-cust', m.el).value); if (!c) return;
+      try {
+        const x = await RB.rpc('rb_customer_open_items', { p_customer: c });
+        $('#wo-left', m.el).textContent = 'Earlier balance not on an invoice: ' + RB.rupees(x.other_balance_paise);
+        $('#wo-amt', m.el).value = Number(x.other_balance_paise) > 0 ? RB.fromPaise(x.other_balance_paise) : '';
+      } catch (e) { RB.modalMsg(m, e.message); }
+    }, 'change');
+    on(m.el, '#wo-go', async () => {
+      try {
+        await RB.rpc('rb_write_off_bad_debt', { p: { customer_id: inv ? o.customer_id : Number($('#wo-cust', m.el).value) || null, sale_id: o.sale_id || null,
+          write_off_date: $('#wo-date', m.el).value, amount_paise: RB.toPaise($('#wo-amt', m.el).value), reason: $('#wo-why', m.el).value } });
+        RB.toast('Written off'); m.close(); if (done) done();
+      } catch (e) { RB.modalMsg(m, e.message); }
+    });
+  };
+
+  I.badDebtModal = (w, done) => {
+    const can = RB.has('power.write_off_debts'), posted = w.status === 'posted';
+    const recs = (w.recoveries || []);
+    const m = RB.modal('<h2>' + esc(w.write_off_no) + RB.demoBadge(w) + '</h2><div class="m-msg"></div>' +
+      '<p>' + esc(w.customer_name) + ' · ' + esc(w.invoice_no || 'Earlier balance') + ' · ' + RB.fmtDate(w.write_off_date) + ' · written off <b>' + RB.rupees(w.amount_paise) + '</b></p>' +
+      '<p class="muted">' + esc(w.reason) + (w.entered_by_name ? ' · by ' + esc(w.entered_by_name) : '') + '</p>' +
+      (!posted ? '<div class="msg info">Reversed: ' + esc(w.reverse_reason || '') + '</div>' : '') +
+      (recs.length ? '<h3>Money recovered</h3><table class="ticks lines"><thead><tr><th>Recovery</th><th>Date</th><th>Amount</th><th>Status</th><th></th></tr></thead><tbody>' +
+        recs.map((r) => '<tr><td>' + esc(r.recovery_no) + '</td><td>' + RB.fmtDate(r.recovery_date) + '</td><td style="text-align:right">' + RB.rupees(r.amount_paise) + '</td><td>' +
+          (r.status === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) + '</td><td>' +
+          (can && r.status === 'posted' ? '<button data-rrev="' + r.id + '">Reverse</button>' : '') + '</td></tr>').join('') + '</tbody></table>' : '') +
+      (posted ? '<p>Still written off: <b>' + RB.rupees(w.left_paise) + '</b></p>' : '') +
+      '<div class="actions">' +
+      (can && posted && Number(w.left_paise) > 0 ? '<button class="primary" id="bm-rec">Book money recovered</button>' : '') +
+      (can && posted ? '<button class="danger" id="bm-rev">Reverse write-off</button>' : '') +
+      (w.sale_id ? '<a class="btn" href="#/invoices/' + w.sale_id + '">Open the invoice</a>' : '') + '<button data-close>Close</button></div>');
+    $$('a.btn', m.el).forEach((a) => a.addEventListener('click', () => m.close()));
+    on(m.el, '#bm-rec', async () => {
+      m.close();
+      let onAcc = 0;
+      try { onAcc = Number((await RB.rpc('rb_customer_open_items', { p_customer: w.customer_id })).on_account_paise); } catch (e) { /* shown on save */ }
+      const r = RB.modal('<h2>Book money recovered on ' + esc(w.write_off_no) + '</h2><div class="m-msg"></div>' +
+        '<p class="muted">The money must already be entered as a customer receipt (Receive a payment), where it waits on account. ' + esc(w.customer_name) + ' has ' + RB.rupees(onAcc) + ' on account now.</p>' +
+        '<div class="row">' + RB.field('br-date', 'Date', '<input type="date" id="br-date" value="' + RB.today() + '">', null, true) +
+        RB.field('br-amt', 'Amount (₹)', RB.inp('br-amt', RB.fromPaise(Math.min(onAcc, Number(w.left_paise))) || '', ' inputmode="decimal"'), 'Still written off: ' + RB.rupees(w.left_paise), true) + '</div>' +
+        RB.field('br-note', 'Note', RB.inp('br-note', '')) +
+        '<div class="actions"><button class="primary" id="br-go">Book as recovered</button><button data-close>Cancel</button></div>');
+      on(r.el, '#br-go', async () => {
+        try {
+          await RB.rpc('rb_record_bad_debt_recovery', { p: { write_off_id: w.id, recovery_date: $('#br-date', r.el).value,
+            amount_paise: RB.toPaise($('#br-amt', r.el).value), note: $('#br-note', r.el).value } });
+          RB.toast('Booked as bad debt recovered'); r.close(); if (done) done();
+        } catch (e) { RB.modalMsg(r, e.message); }
+      });
+    });
+    on(m.el, '#bm-rev', () => { m.close(); SA().reverseModal('Reverse ' + w.write_off_no,
+      'The customer owes the amount again' + (w.sale_id ? ' and the invoice opens again' : '') + '. The bad debt charge is reversed on the date below.',
+      (dt, why) => RB.rpc('rb_reverse_bad_debt', { p_id: w.id, p_date: dt, p_reason: why }), done); });
+    $$('[data-rrev]', m.el).forEach((b) => b.addEventListener('click', () => { m.close(); SA().reverseModal('Reverse the recovery',
+      'The income is reversed and the money goes back on account for the customer.',
+      (dt, why) => RB.rpc('rb_reverse_bad_debt_recovery', { p_id: Number(b.dataset.rrev), p_date: dt, p_reason: why }), done); }));
   };
 
   // ===================================================================

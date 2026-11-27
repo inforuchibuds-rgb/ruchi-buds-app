@@ -1,6 +1,8 @@
 # Ruchi Buds app: Module 5 setup guide
 
-Version 1.0 · 27-Nov-2026 · Module 5: Sales, invoices and AR
+Version 1.1 · 27-Nov-2026 · Module 5: Sales, invoices and AR
+
+> **Already ran version 1.0 of `05_sales_invoices.sql`?** Run the new version once more (step 2). It adds bad debts and keeps everything you entered. Then reload the app.
 
 This update takes about 10 minutes. You paste one file into Supabase. GitHub Pages updates the screens on its own once the pull request is merged.
 
@@ -22,9 +24,14 @@ This update takes about 10 minutes. You paste one file into Supabase. GitHub Pag
   - A balance from before the app (an opening balance) shows as **Earlier balance (not on an invoice)** and can be paid off the same way.
   - **Refund a customer**: pays back a credit note or an overpayment. Only the Accountant, FC and Directors have this.
   - **Customer balances** with ageing: not yet due, 1–30, 31–60, 61–90 and over 90 days, from each invoice's due date.
+- **Bad debts** (only the FC and Directors):
+  - **Write off as bad debt** on an unpaid invoice, with a reason. The invoice closes, the customer's balance drops, and the amount is charged to **Bad Debt Write-offs**.
+  - **Customer receipts → Bad debts** lists every write-off. **Write off an earlier balance** handles an opening balance that is not on an invoice.
+  - If the customer pays later, enter the money as a normal receipt. Then tap the write-off and press **Book money recovered**: it counts as other income.
+  - Each write-off or recovery can be reversed.
 - **Customers** (home → Customers) now has a second tab, **Balances and statements**. Tap a customer for their **ledger and statement**: print it, or **Share a link** that the customer can open on their phone without a password. The link stops after 30 days (Settings), or straight away with **Switch off links**.
 - **Settings → Sales and invoices**: whether Masters prices include GST, the line at the bottom of every invoice, and how long statement links work.
-- **DEMO data** (21 to 27 November 2026): 12 invoices to retail customers, traders and walk-ins (cash, UPI, bank, credit, part paid, discounts, loose powder, a by-product and a special trader price), 2 customer receipts, 2 posted returns (one thrown away, one back on the shelf and refunded) and 1 return waiting for approval.
+- **DEMO data** (21 to 27 November 2026): 12 invoices to retail customers, traders and walk-ins (cash, UPI, bank, credit, part paid, discounts, loose powder, a by-product and a special trader price), 2 customer receipts, 2 posted returns (one thrown away, one back on the shelf and refunded) 1 return waiting for approval, and 1 bad debt (Coastal Delights) with ₹1,000 of it recovered.
 
 ## Decisions built in (please check them)
 
@@ -42,14 +49,14 @@ This update takes about 10 minutes. You paste one file into Supabase. GitHub Pag
 | Who sees money | Staff see the bill they are making, so they can collect it, but no sales totals, balances or costs. Costs and margins show only for the **margin** tick (Accountant, FC, Directors). | Spec section 4. |
 | Numbers | Inv/YYMM/00001 for invoices, CN for credit notes, RCT for receipts and RFD for refunds. They run on and never restart. Training entries start TRN-…, DEMO entries DEMO-…. | Spec section 8. |
 | Cancel or delete | **Cancel** keeps the invoice, marked Cancelled, and reverses the books and stock. **Delete fully** is only for invoices made by someone in their learning phase; after go-live it leaves a gap in the invoice numbers. | Spec section 4. |
+| Bad debts | Written off to **Bad Debt Write-offs** (80080110), off the customer balance. Money recovered later goes to **Other Non-operating Income** (90010135). Only the FC and Directors, with a reason. Numbered BD/… and BDR/…. | AS 9 (revenue stays recognised; the loss is an expense). The month-end provision for doubtful debts comes with module 6. |
 | Advances | Money received before an invoice stays in Trade Receivables as a minus balance. | Reclassified as a liability in the reports (module 8). |
 | PDF | **Print / Save as PDF** uses the phone's or computer's own print. Choose "Save as PDF" as the printer. | Free, works on every device. |
 
 **For your CA (please ask them):**
 
-1. Before GST registration, should the document be called **Invoice** (as now) or **Bill of Supply**? The app can rename it in a minute.
-2. Bad debts: for now a Director or the FC writes off an unpaid invoice by a manual journal in Accounts. Is that enough, or should there be a screen for it?
-3. Delivery charges are left for the online shop module (module 10).
+1. The provision for doubtful debts (module 6): what % of overdue money to set aside for each ageing band (for example 1–90, 91–180 and over 180 days).
+2. Delivery charges are left for the online shop module (module 10).
 
 ## Step 1. Take a backup (1 minute)
 
@@ -78,7 +85,7 @@ The home menu now shows **Sales**, **Invoices**, **Customers** and **Customer re
 2. **Masters → Items**: items sold loose need their **loose price** per kg. Before GST registration, also fill each item's **HSN code** and **GST rate**, so Tax Invoices work from day one.
 3. **Customers**: each trader needs a **credit limit** and **credit days** if they buy on credit. Add a **state code** for traders in another state.
 4. **Settings → Firm details**: the registered address, state code (Maharashtra is 27), FSSAI no. and Firm Reg. no. all print on invoices. **Settings → Sales and invoices**: write your invoice footer line.
-5. **Users → Categories and access**: check **Sales**, **Invoices**, **Customers** and **Customer receipts** for each category. By default Staff can view and add sales; Sales can also edit; Managers can approve returns and allow credit over the limit; AR receives payments; refunds are for the Accountant, FC and Directors.
+5. **Users → Categories and access**: check **Sales**, **Invoices**, **Customers** and **Customer receipts** for each category. By default Staff can view and add sales; Sales can also edit; Managers can approve returns and allow credit over the limit; AR receives payments; refunds are for the Accountant, FC and Directors. **Write off bad debts** is a new right, held only by the FC and Directors; tick it for another category only if you want them to write off debts.
 
 ## Files in this module
 

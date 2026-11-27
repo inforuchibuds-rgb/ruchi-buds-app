@@ -131,6 +131,23 @@ const BASE = 'http://localhost:8787/';
   await page.fill('#rf-why', 'Overpaid'); await page.click('#rf-save'); await see('Refund saved');
   step('refund of the overpayment (' + can + ')');
 
+  // Bad debts: write off Konkan's unpaid invoice, then book money received later as recovered
+  await page.goto(BASE + '#/sales'); await page.click('button[data-tab=list]'); await page.fill('#sl-from', '2026-11-01'); await page.click('#sl-go');
+  await page.getByText('DEMO-Inv/2611/00004').first().click(); await see('Bill to');
+  await page.click('#iw-wo'); await opened(); await page.fill('#wo-why', 'Customer closed down'); await shot('v15b-write-off');
+  await page.click('#wo-go'); await see('Written off as bad debt'); await see('Closed');
+  await shot('v15c-invoice-written-off'); step('Konkan\'s unpaid invoice written off as a bad debt: the invoice shows Closed and the write-off');
+  await page.goto(BASE + '#/receipts'); await see('DEMO-RCT/2611/00001');
+  await page.click('#rp-recv'); await opened();
+  await page.selectOption('#rc-cust', { label: 'Konkan Foods (DEMO)' }); await page.waitForTimeout(500);
+  await see('written off as bad'); await page.fill('#rc-amt', '500'); await page.click('#rc-save'); await see('Receipt saved');
+  await page.click('button[data-tab=bad]'); await see('DEMO-BD/2611/00001'); await see('TRN-BD/2611/00001');
+  await page.locator('#bd-grid .tabulator-row', { hasText: 'TRN-BD/2611/00001' }).first().click(); await opened();
+  await page.click('#bm-rec'); await opened(); await page.waitForTimeout(300);
+  if ((await page.inputValue('#br-amt')) !== '500.00') throw new Error('Recovery amount not filled from the money on account: ' + await page.inputValue('#br-amt'));
+  await page.click('#br-go'); await see('Booked as bad debt recovered'); await page.waitForTimeout(400);
+  await shot('v15d-bad-debts'); step('₹500 received later from Konkan and booked as bad debt recovered');
+
   // Settings: register for GST from today, then a Tax Invoice
   await page.goto(BASE + '#/settings'); await see('Sales and invoices');
   await page.fill('#st-address', 'Shop 1, Market Road, Pune'); await page.fill('#st-state_code', '27');
