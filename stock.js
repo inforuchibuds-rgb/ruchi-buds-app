@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · stock.js · Version 1.0 · 27-Nov-2026
+// RUCHI BUDS APP · stock.js · Version 1.1 · 27-Nov-2026
 // Module 4 screens "Production" and "Stock". Production: the Production
 // window (Preparation, Final production, or Prepare and produce
 // together), the batch window, the batch list, the yield report and
@@ -16,7 +16,8 @@
   const KIND = { raw: 'Raw material', packaging: 'Packaging', wip: 'Prepared (WIP)', finished: 'Finished goods', byproduct: 'By-product' };
   const MOVE = { grn: 'Goods received', bill_adjust: 'Bill difference', debit_note: 'Debit note', purchase_return: 'Returned to supplier',
     reversal: 'Reversal', preparation: 'Preparation', production: 'Production', wastage: 'Write-off', write_down: 'Write-down',
-    count: 'Stock count', sale: 'Sale', sales_return: 'Sales return', opening: 'Opening stock', brought_forward: '' };
+    count: 'Stock count', sale: 'Sale', sales_return: 'Sales return', opening: 'Opening stock', brought_forward: '',
+    overhead: 'Labour and overheads (month-end)' };
   const ADJ_STATUS = { awaiting_approval: 'Waiting for approval', posted: 'Posted', refused: 'Refused', reversed: 'Reversed' };
   const COUNT_STATUS = { draft: 'Waiting for approval', posted: 'Posted', cancelled: 'Cancelled', reversed: 'Reversed' };
   const BADGE = { awaiting_approval: 'protected', draft: 'protected', posted: 'active', refused: 'inactive', cancelled: 'inactive', reversed: 'inactive' };

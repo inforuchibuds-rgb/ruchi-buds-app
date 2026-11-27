@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · purchases.js · Version 1.1 · 27-Nov-2026
+// RUCHI BUDS APP · purchases.js · Version 1.2 · 27-Nov-2026
 // Module 3 screen "Purchases": the Purchase window (order, receive, bill,
 // matched side by side), direct purchases with no PO, every difference
 // with Accept or Reject, returns, supplier payments, supplier balances and
@@ -771,7 +771,8 @@
   }
 
   // ---------- pay a supplier ----------
-  // o: { supplier_id, purchase_id (start with this bill), allocateOnly (an existing payment's remainder) }
+  // o: { supplier_id, purchase_id or expense_id (start with this bill), allocateOnly (an existing payment's remainder) }
+  // Lists purchase bills and expense bills on credit (module 6).
   async function payModal(o, done) {
     o = o || {};
     const d = await lists();
@@ -780,26 +781,46 @@
       '<div class="row">' + (alloc ? '<div class="field"><label>Supplier</label><p>' + esc(alloc.supplier) + '</p></div>' : supplierPicker(d, 'pay-sup', o.supplier_id)) +
       (alloc ? '<div class="field"><label>Left to set against bills</label><p>' + RB.rupees(alloc.on_account) + '</p></div>' :
         RB.field('pay-date', 'Date paid', '<input type="date" id="pay-date" value="' + RB.today() + '">', null, true) +
-        RB.field('pay-mode', 'How', RB.sel('pay-mode', [['cash', 'Cash'], ['upi', 'UPI'], ['bank', 'Bank']], 'bank'), null, true)) + '</div>' +
+        RB.field('pay-mode', 'How', RB.sel('pay-mode', [['cash', 'Cash'], ['upi', 'UPI'], ['bank', 'Bank']], 'bank'), null, true) +
+        RB.field('pay-acc', 'Paid from', '<select id="pay-acc"></select>')) + '</div>' +
       (alloc ? '' : '<div class="row">' + RB.field('pay-amt', 'Amount paid (₹)', RB.inp('pay-amt', '', ' inputmode="decimal"'), 'Leave as filled to pay the bills ticked below. More than the bills is kept "on account".', true) +
         RB.field('pay-ref', 'Reference', RB.inp('pay-ref', '', ' placeholder="UPI, NEFT or cheque no."')) + '</div>') +
       '<h3>Open bills</h3><div id="pay-bills"><p class="muted">Choose the supplier.</p></div>' +
       '<div class="actions"><button class="primary" id="pay-save">' + (alloc ? 'Save' : 'Save payment') + '</button><button data-close>Cancel</button></div>', { wide: true });
     wireSupplierAdd(m, d);
+    // Which cash or bank account the money came from (module 6).
+    let accts = [];
+    try { accts = await RB.select('money_accounts', 'id,name,kind,is_default,is_active', (x) => x.eq('is_active', true).order('sort')); } catch (e) { accts = []; }
+    const fillAcc = () => {
+      const sel = $('#pay-acc', m.el); if (!sel) return;
+      const kind = $('#pay-mode', m.el).value === 'cash' ? 'cash' : 'bank';
+      const list = accts.filter((a) => a.kind === kind);
+      sel.innerHTML = list.length ? list.map((a) => '<option value="' + a.id + '"' + (a.is_default ? ' selected' : '') + '>' + esc(a.name) + '</option>').join('')
+        : '<option value="">Main ' + kind + ' account</option>';
+    };
+    if (!alloc) { fillAcc(); $('#pay-mode', m.el).addEventListener('change', fillAcc); }
     let bills = [];
     const supId = () => (alloc ? alloc.supplier_id : Number($('#pay-sup', m.el).value) || null);
     const load = async () => {
       const sid = supId(); const box = $('#pay-bills', m.el);
       if (!sid) { box.innerHTML = '<p class="muted">Choose the supplier.</p>'; bills = []; return; }
-      const rows = await RB.select('purchases', 'id,po_no,bill_no,bill_date,purchase_date,outstanding_paise,open_discrepancies,status,is_demo', (x) => x.eq('supplier_id', sid).order('id'));
-      bills = rows.filter((r) => r.outstanding_paise > 0 && ['billed'].includes(r.status));
+      let rows = [];
+      if (RB.has('purchases.view')) rows = await RB.select('purchases', 'id,po_no,bill_no,bill_date,purchase_date,outstanding_paise,open_discrepancies,status,is_demo', (x) => x.eq('supplier_id', sid).order('id'));
+      bills = rows.filter((r) => r.outstanding_paise > 0 && ['billed'].includes(r.status)).map((r) => Object.assign({ kind: 'purchase' }, r));
+      // Expense bills on credit (module 6), e.g. a repair or the gas bill.
+      let exp = [];
+      try { exp = await RB.select('expenses', 'id,expense_no,bill_no,bill_date,expense_date,description,outstanding_paise,is_demo', (x) => x.eq('supplier_id', sid).eq('status', 'posted').gt('outstanding_paise', 0).order('id')); } catch (e) { exp = []; }
+      bills = bills.concat(exp.map((r) => ({ kind: 'expense', id: r.id, bill_no: r.bill_no, po_no: r.expense_no + ' · ' + r.description, bill_date: r.bill_date || r.expense_date,
+        outstanding_paise: r.outstanding_paise, open_discrepancies: 0, is_demo: r.is_demo })));
       if (!bills.length) { box.innerHTML = '<p class="muted">No unpaid bills for this supplier' + (alloc ? '.' : '. A payment now is kept on account (an advance).') + '</p>'; return; }
       let left = alloc ? alloc.on_account : null;
-      box.innerHTML = '<div class="grid-wrap"><table class="ticks lines"><thead><tr><th>Bill</th><th>Order</th><th>Date</th><th>Owed</th><th>Pay now ₹</th></tr></thead><tbody>' +
+      box.innerHTML = '<div class="grid-wrap"><table class="ticks lines"><thead><tr><th>Bill</th><th>Order or expense</th><th>Date</th><th>Owed</th><th>Pay now ₹</th></tr></thead><tbody>' +
         bills.map((b, i) => {
           const blocked = b.open_discrepancies > 0;
           let fill = '';
-          if (!blocked && (o.purchase_id ? String(b.id) === String(o.purchase_id) : true)) {
+          const wanted = o.expense_id ? b.kind === 'expense' && String(b.id) === String(o.expense_id)
+            : o.purchase_id ? b.kind === 'purchase' && String(b.id) === String(o.purchase_id) : true;
+          if (!blocked && wanted) {
             const v = left == null ? b.outstanding_paise : Math.min(left, b.outstanding_paise);
             if (v > 0) { fill = RB.fromPaise(v); if (left != null) left -= v; }
           }
@@ -816,9 +837,13 @@
     await load().catch((e) => RB.modalMsg(m, e.message));
     $('#pay-save', m.el).addEventListener('click', async () => {
       try {
-        const allocations = $$('[data-pay]', m.el).map((el) => ({ purchase_id: bills[Number(el.dataset.pay)].id, amount_paise: RB.toPaise(el.value) || 0 })).filter((a) => a.amount_paise > 0);
+        const allocations = $$('[data-pay]', m.el).map((el) => {
+          const b = bills[Number(el.dataset.pay)];
+          return Object.assign(b.kind === 'expense' ? { expense_id: b.id } : { purchase_id: b.id }, { amount_paise: RB.toPaise(el.value) || 0 });
+        }).filter((a) => a.amount_paise > 0);
         if (alloc) await RB.rpc('rb_allocate_payment', { p_payment: alloc.id, p_allocations: allocations });
-        else await RB.rpc('rb_pay_supplier', { p: { supplier_id: supId(), pay_date: $('#pay-date', m.el).value, mode: $('#pay-mode', m.el).value,
+        else await RB.rpc(RB.has('purchases.add') ? 'rb_pay_supplier' : 'rb_pay_expense_bill', { p: { supplier_id: supId(), pay_date: $('#pay-date', m.el).value,
+          mode: $('#pay-mode', m.el).value, money_account_id: Number(($('#pay-acc', m.el) || {}).value) || null,
           amount_paise: RB.toPaise($('#pay-amt', m.el).value), reference: $('#pay-ref', m.el).value, allocations } });
         RB.toast(alloc ? 'Payment set against bills' : 'Payment saved'); m.close();
         if (done) done(); else RB.route();

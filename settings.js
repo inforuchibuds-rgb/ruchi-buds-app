@@ -1,7 +1,8 @@
 // =====================================================================
-// RUCHI BUDS APP · settings.js · Version 1.2 · 27-Nov-2026
+// RUCHI BUDS APP · settings.js · Version 1.3 · 27-Nov-2026
 // Firm details, partners and profit share, entry rules, word mark,
 // training mode and go-live, demo data, backups and the keep-awake check.
+// Module 6 adds: expense approval limit and the CA's rates for doubtful debts.
 // =====================================================================
 (function () {
   'use strict';
@@ -52,6 +53,17 @@
       '<div class="field"><label for="st-footer">Line at the bottom of every invoice</label><textarea id="st-footer"' + dis + ' placeholder="e.g. Thank you! Goods once sold are taken back only if the seal is unbroken.">' + esc(s.invoice_footer || '') + '</textarea></div>' +
       '<div class="row"><div class="field" style="flex:0 1 260px"><label for="st-linkdays">Statement links work for (days)</label><input id="st-linkdays" type="number" min="1" max="365" value="' + esc(s.statement_link_days || 30) + '"' + dis + '>' +
       '<div class="hint">A customer can open a shared statement link without a password until it runs out. It can be switched off at any time.</div></div></div></section>') +
+      // ---- expenses and month-end (once 06_cash_bank.sql has run)
+      (!('doubtful_debt_bands' in s) ? '' : '<section class="card"><h2>Expenses and month-end</h2>' +
+      '<div class="row"><div class="field" style="flex:0 1 320px"><label for="st-exlimit">Expenses above this need approval (₹)</label><input id="st-exlimit" type="number" min="0" step="1" value="' +
+      (s.expense_approval_limit_paise == null ? '' : s.expense_approval_limit_paise / 100) + '"' + dis + '><div class="hint">Approved by the Accountant, the FC or a Director. Blank means no approval is needed.</div></div></div>' +
+      '<h3>Provision for doubtful debts: the CA\'s rates</h3>' +
+      (s.doubtful_debt_rates_example ? '<div class="msg error">These rates are only an example. Enter the rates the CA gives you and press Save settings.</div>' : '') +
+      '<p class="muted">At each month-end, customer balances are grouped by how many days they are past the due date. Each group gets the CA\'s percentage. The last band is "and over".</p>' +
+      '<div id="st-bands"></div>' + (edit ? '<button type="button" id="st-addband">+ Add a band</button>' : '') +
+      '<div class="row" style="margin-top:.5rem"><div class="field" style="flex:0 1 320px"><label for="st-otherpct">Balances not on an invoice (%)</label><input id="st-otherpct" type="number" min="0" max="100" step="0.01" value="' + esc(s.doubtful_debt_other_pct) + '"' + dis + '>' +
+      '<div class="hint">Opening balances and journal entries, which have no due date.</div></div>' +
+      '<div class="field"><label for="st-ratesnote">Where the rates come from</label><input id="st-ratesnote" value="' + esc(s.doubtful_debt_rates_note || '') + '"' + dis + ' placeholder="e.g. CA letter of 5-Dec-2026"></div></div></section>') +
       // ---- word mark
       '<section class="card"><h2>Word mark</h2><p class="muted">Shown on the login screen, the banner and invoices. Replace it here when the designer sends the final file. A PNG or SVG with a see-through background, under 300 KB, works best.</p>' +
       '<div style="background:var(--ruchi-red);padding:1rem;border-radius:8px;display:inline-block"><img id="st-wm" src="' + esc(s.wordmark_url || 'assets/wordmark.png') + '" alt="Word mark" style="height:70px"></div>' +
@@ -88,6 +100,31 @@
     };
     drawPartners();
 
+    // age bands for doubtful debts (module 6): days past due "up to", and the rate
+    let bands = (s.doubtful_debt_bands || []).map((b) => ({ upto: b.upto, pct: b.pct }));
+    const drawBands = () => {
+      const el = $('#st-bands', body); if (!el) return;
+      let lo = 0;
+      el.innerHTML = '<div class="grid-wrap"><table class="ticks lines" style="min-width:0"><thead><tr><th>Days past the due date</th><th>Up to (days)</th><th>Rate %</th><th></th></tr></thead><tbody>' +
+        bands.map((b, i) => {
+          const last = i === bands.length - 1;
+          const label = last ? (lo === 0 ? 'Any' : 'Over ' + (lo - 1)) : (Number(b.upto) === 0 && i === 0 ? 'Not yet due' : lo + ' to ' + b.upto);
+          if (!last) lo = Number(b.upto) + 1;
+          return '<tr><td>' + esc(label) + '</td><td>' + (last ? 'and over' : '<input data-bu="' + i + '" type="number" min="0" step="1" value="' + esc(b.upto) + '"' + dis + ' style="max-width:110px">') + '</td>' +
+            '<td><input data-bp="' + i + '" type="number" min="0" max="100" step="0.01" value="' + esc(b.pct) + '"' + dis + ' style="max-width:110px"></td>' +
+            '<td>' + (edit && bands.length > 2 ? '<button type="button" data-br="' + i + '" aria-label="Remove">✕</button>' : '') + '</td></tr>';
+        }).join('') + '</tbody></table></div>';
+      $$('[data-bu]', el).forEach((x) => x.addEventListener('change', () => { bands[x.dataset.bu].upto = x.value === '' ? null : Number(x.value); drawBands(); }));
+      $$('[data-bp]', el).forEach((x) => x.addEventListener('input', () => { bands[x.dataset.bp].pct = x.value; }));
+      $$('[data-br]', el).forEach((x) => x.addEventListener('click', () => { bands.splice(Number(x.dataset.br), 1); bands[bands.length - 1].upto = null; drawBands(); }));
+    };
+    drawBands();
+    const addBand = $('#st-addband', body);
+    if (addBand) addBand.addEventListener('click', () => {
+      const prev = bands.length > 1 ? Number(bands[bands.length - 2].upto) : 0;
+      bands.splice(bands.length - 1, 0, { upto: prev + 30, pct: 0 }); drawBands();
+    });
+
     if (edit) {
       $('#st-addp', body).addEventListener('click', () => { partners.push({ name: 'Partner ' + (partners.length + 1), weight: 1 }); drawPartners(); });
       $('#st-wmfile', body).addEventListener('change', (e) => {
@@ -116,6 +153,15 @@
           if (v('gstin').trim() || s.gst_registered_from) await RB.rpc('rb_set_gst_registration', { p_gstin: v('gstin'), p_from: v('gstfrom') || null });
           if ($('#st-incl', body)) await RB.rpc('rb_save_sales_settings', { p: { sale_prices_include_gst: $('#st-incl', body).checked, invoice_footer: v('footer'),
             statement_link_days: Number(v('linkdays')) || 30 } });
+          if ($('#st-exlimit', body)) {
+            const ex = v('exlimit');
+            const changed = JSON.stringify(bands.map((b) => [b.upto == null ? null : Number(b.upto), Number(b.pct) || 0])) !==
+              JSON.stringify((s.doubtful_debt_bands || []).map((b) => [b.upto == null ? null : Number(b.upto), Number(b.pct) || 0])) ||
+              Number(v('otherpct') || 0) !== Number(s.doubtful_debt_other_pct || 0);
+            await RB.rpc('rb_save_cashbank_settings', { p: Object.assign({ expense_approval_limit_paise: ex === '' ? null : Math.round(Number(ex) * 100),
+              doubtful_debt_rates_note: v('ratesnote') },
+              changed ? { doubtful_debt_bands: bands.map((b, i) => ({ upto: i === bands.length - 1 ? null : b.upto, pct: Number(b.pct) || 0 })), doubtful_debt_other_pct: Number(v('otherpct') || 0) } : {}) });
+          }
                     RB.cache.settings = Object.assign(RB.cache.settings || {}, { wordmark_url: wordmark || null, firm_name: v('firm_name') });
           const img = $('.banner .wordmark'); if (img) img.src = wordmark || 'assets/wordmark.png';
           $('#st-saved', body).textContent = 'Saved ' + RB.fmtDateTime(new Date());
