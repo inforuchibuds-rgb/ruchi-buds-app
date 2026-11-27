@@ -162,6 +162,13 @@ table.ticks .soon { font-size: .75rem; color: var(--muted); font-weight: 400; }
   border: none; background: transparent; font-size: 1.2rem; line-height: 1; color: var(--brown); }
 .modal-x:hover { background: #FFF3D6; }
 .modal > h2:first-of-type { padding-right: 2.5rem; }
+.page-extra { display: flex; flex-wrap: wrap; gap: .4rem; width: 100%; justify-content: flex-end; }
+.page-extra button { min-height: 2.25rem; padding: .3rem .7rem; font-size: .9rem; }
+.qs-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.qs-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem .75rem; text-decoration: none; color: inherit; border-bottom: 1px solid var(--line); }
+.qs-row:last-child { border-bottom: none; }
+.qs-row:hover, .qs-row:focus { background: #FFF3D6; }
+@media (max-width: 600px) { .banner .lbl { display: none; } .page-extra { justify-content: flex-start; } }
 /* Privacy: the Hide button blurs everything until tapped */
 body.privacy > *:not(#privacy) { filter: blur(18px); }
 #privacy { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
@@ -236,7 +243,7 @@ table.inv-lines tfoot td { font-weight: 700; border-top: 2px solid var(--line); 
 main.public { max-width: 900px; margin: 0 auto; padding: 1rem; }
 
 @media print {
-  .banner, .training-strip, .actions, .tabs, .no-print, .page-head .back, .nav-btns, .modal-x, #page-tools { display: none !important; }
+  .banner, .training-strip, .actions, .tabs, .no-print, .page-head .back, .nav-btns, .page-extra, .modal-x, #page-tools { display: none !important; }
   body { background: #FFF; }
   main { padding: 0 !important; }
   .invoice { border: 0; padding: 0; }

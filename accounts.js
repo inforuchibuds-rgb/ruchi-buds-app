@@ -39,7 +39,8 @@
   }
   const accName = (a) => a ? a.code + ' ' + (a.local_name || a.name) : '';
 
-  RB.screens.accounts = async (body) => {
+  // arg 'j<id>' (from Quick search) opens that journal.
+  RB.screens.accounts = async (body, arg) => {
     cache = null;
     const list = [['journals', 'Journals', journalsTab], ['tb', 'Trial balance', tbTab], ['ledger', 'Account ledger', ledgerTab],
       ['coa', 'Chart of accounts', coaTab], ['rules', 'Posting rules', rulesTab], ['months', 'Month lock', monthsTab]];
@@ -52,7 +53,9 @@
       catch (e) { tb.innerHTML = '<div class="msg error">' + esc(e.message) + '</div>'; }
     };
     $$('.tabs button', body).forEach((b) => b.addEventListener('click', () => show(b.dataset.tab)));
-    show('journals');
+    await show('journals');
+    const jm = /^j(\d+)$/.exec(arg || '');
+    if (jm) journalModal(Number(jm[1]), () => show('journals'));
   };
 
   // ===================================================================

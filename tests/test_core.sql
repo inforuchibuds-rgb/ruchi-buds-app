@@ -132,5 +132,14 @@ select set_config('request.jwt.claim.role', 'service_role', false);
 select t_ok((select count(*) from rb_backup_tables()) >= 12, 'Backup sees every table');
 select t_ok(rb_ping() is not null, 'Keep-awake ping works');
 select rb_log_backup('nightly', 'ok', 12, 100, 'test');
+-- Automatic sign-out (version 1.1)
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
+select t_ok((select idle_signout_minutes from app_settings) = 30, 'Automatic sign-out starts at 30 minutes');
+select rb_save_settings('{"idle_signout_minutes": 0}');
+select t_ok((select idle_signout_minutes from app_settings) = 0, 'Automatic sign-out can be switched off (0)');
+select t_err($$select rb_save_settings('{"idle_signout_minutes": 600}')$$, 'between 0');
+select rb_save_settings('{"firm_name": "Ruchi Buds"}');
+select t_ok((select idle_signout_minutes from app_settings) = 0, 'Saving other settings keeps it');
+select rb_save_settings('{"idle_signout_minutes": 30}');
 reset role;
 \echo ALL TESTS PASSED

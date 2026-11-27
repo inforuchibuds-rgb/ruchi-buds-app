@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.2 · 27-Nov-2026 (Back, Home, Close and Hide buttons)
+// RUCHI BUDS APP · core.js · Version 1.3 · 27-Nov-2026 (Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out)
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -128,6 +128,7 @@
     placeholder: 'Nothing to show yet', movableColumns: true,
     pagination: data.length > 50, paginationSize: 50,
     columnDefaults: { headerFilter: 'input', headerFilterPlaceholder: 'filter…', tooltip: true },
+    printAsHtml: true, printRowRange: 'active',  // Print shows every row that passes the filters, not just this page
   }, opts || {}));
 
   RB.downloadExcel = (grid, name) => {
@@ -240,6 +241,9 @@
       const s = await RB.select('app_settings', 'wordmark_url,firm_name,training_mode,go_live_date', (q) => q.eq('id', 1).single());
       RB.cache.settings = s;
     } catch (e) { RB.cache.settings = p.settings; }
+    try { RB.cache.idleMinutes = (await RB.select('app_settings', 'idle_signout_minutes', (q) => q.eq('id', 1).single())).idle_signout_minutes; }
+    catch (e) { RB.cache.idleMinutes = 30; }  // before 01_core_users.sql 1.1 is run
+    RB.idleSignout();
     if (p.must_change_password) return RB.showChangePassword(true);
     RB.route();
   };
@@ -252,14 +256,23 @@
       '<header class="banner"><a href="#/" aria-label="Home"><img class="wordmark" src="' + RB.esc(logo) + '" alt="Ruchi Buds"></a>' +
       '<div class="spacer"></div><div class="who">' + RB.esc(p.short_name || p.full_name) +
       '<small>' + RB.esc(p.category) + '</small></div>' +
-      '<button id="btn-hide" type="button" title="Hide the screen (Ctrl+Shift+H)">🙈 Hide</button>' +
+      '<button id="btn-search" type="button" title="Find an invoice, purchase, journal, customer or supplier (Ctrl+K)">🔍 <span class="lbl">Search</span></button>' +
+      '<button id="btn-hide" type="button" title="Hide the screen (Ctrl+Shift+H)">🙈 <span class="lbl">Hide</span></button>' +
       '<button id="btn-signout" type="button">Sign out</button></header>' +
       (s.training_mode ? '<div class="training-strip">Training mode: entries made now are cleared at go-live</div>' : '') +
       '<main id="page">' +
-      (opts && opts.home ? '' : '<div class="page-head"><div class="nav-btns"><button type="button" id="nav-back">‹ Back</button><a class="btn back" href="#/" hidden></a><a class="btn" id="nav-home" href="#/">⌂ Home</a></div><h1>' + RB.esc(title) + '</h1><div id="page-tools" class="actions" style="margin:0"></div></div>') +
+      (opts && opts.home ? '' : '<div class="page-head"><div class="nav-btns"><button type="button" id="nav-back">‹ Back</button><a class="btn back" href="#/" hidden></a><a class="btn" id="nav-home" href="#/">⌂ Home</a></div><h1>' + RB.esc(title) + '</h1><div id="page-tools" class="actions" style="margin:0"></div>' +
+        '<div class="page-extra"><button type="button" id="pg-refresh" title="Load the figures again">⟳ Refresh</button><button type="button" id="pg-print">🖨 Print</button>' +
+        '<button type="button" id="pg-xls" title="Download the lists and tables on this screen">⬇ Excel</button><button type="button" id="pg-help">? Help</button></div></div>') +
       '<div id="page-body"></div></main>';
     $('#btn-signout').addEventListener('click', () => RB.signOut());
     $('#btn-hide').addEventListener('click', () => RB.privacy(true));
+    $('#btn-search').addEventListener('click', () => RB.search());
+    const pb = (id, fn) => { const b = $(id); if (b) b.addEventListener('click', fn); };
+    pb('#pg-refresh', () => RB.route());
+    pb('#pg-print', () => window.print());
+    pb('#pg-xls', () => RB.pageExcel(title));
+    pb('#pg-help', () => (RB.showHelp ? RB.showHelp() : null));
     if ($('#nav-back')) $('#nav-back').addEventListener('click', RB.goBack);
     return $('#page-body');
   };
@@ -289,7 +302,76 @@
       if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) { e.preventDefault(); RB.privacy(!$('#privacy')); return; }
       if ($('#privacy')) { e.preventDefault(); e.stopPropagation(); RB.privacy(false); return; }
       if (e.key === 'Escape') { const x = $$('.modal-bg .modal-x').pop(); if (x) x.click(); }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K') && RB.profile) { e.preventDefault(); RB.search(); }
     }, true);
+  })();
+
+  // ---------- Excel of whatever is on the screen ----------
+  // Every visible grid and table on the screen (or the open pop-up) becomes a sheet.
+  RB.pageExcel = (title) => {
+    const top = $$('.modal-bg').pop();
+    const root = top || $('#page-body');
+    const seen = (el) => el.offsetParent !== null;
+    const wb = XLSX.utils.book_new(); const names = {};
+    const add = (ws, name) => {
+      let n = (name || 'Sheet').replace(/[\\/?*[\]:]/g, ' ').slice(0, 28) || 'Sheet';
+      if (names[n]) n = n.slice(0, 25) + ' ' + (++names[n]); else names[n] = 1;
+      XLSX.utils.book_append_sheet(wb, ws, n);
+    };
+    const nameNear = (el) => { const h = el.closest('section, .card, .modal'); const t = h && $('h2, h3', h); return t ? t.textContent : title; };
+    $$('.tabulator', root).filter(seen).forEach((el) => {
+      const t = (Tabulator.findTable(el) || [])[0]; if (!t) return;
+      const cols = t.getColumns().filter((c) => c.isVisible() && c.getField());
+      const strip = (h) => String(h || '').replace(/<[^>]*>/g, '').trim();
+      const aoa = [cols.map((c) => strip(c.getDefinition().title))].concat(t.getData('active').map((r) => cols.map((c) => {
+        const v = r[c.getField()]; return v == null ? '' : (typeof v === 'object' ? JSON.stringify(v) : v); })));
+      add(XLSX.utils.aoa_to_sheet(aoa), nameNear(el));
+    });
+    $$('table', root).filter((el) => seen(el) && !el.closest('.tabulator')).forEach((el) => add(XLSX.utils.table_to_sheet(el, { raw: true }), nameNear(el)));
+    if (!wb.SheetNames.length) return RB.toast('There is no list or table on this screen to download.', true);
+    XLSX.writeFile(wb, (title || 'Ruchi Buds') + ' ' + RB.fmtDate(new Date()) + '.xlsx');
+  };
+
+  // ---------- Quick search ----------
+  RB.search = () => {
+    const m = RB.modal('<h2>🔍 Search</h2>' +
+      '<input id="qs-q" type="search" autocomplete="off" placeholder="Invoice or PO number, journal number, name or phone…">' +
+      '<p class="muted" style="margin:.4rem 0">Type at least 2 letters. Finds invoices, purchases, journals, customers and suppliers you may see.</p>' +
+      '<div id="qs-out"></div>', { wide: true });
+    const inp = $('#qs-q', m.el), out = $('#qs-out', m.el);
+    let t, seq = 0;
+    const go = async () => {
+      const q = inp.value.trim(), my = ++seq;
+      if (q.length < 2) { out.innerHTML = ''; return; }
+      out.innerHTML = '<p class="muted">Searching…</p>';
+      try {
+        const rows = await RB.rpc('rb_quick_search', { p_q: q });
+        if (my !== seq) return;
+        out.innerHTML = rows.length ? '<div class="qs-list">' + rows.map((r) =>
+          '<a class="qs-row" href="' + RB.esc(r.link) + '"><span class="badge">' + RB.esc(r.kind) + '</span><b>' + RB.esc(r.label) + '</b>' +
+          '<span class="muted">' + RB.esc(r.detail || '') + (r.on_date ? ' · ' + RB.fmtDate(r.on_date) : '') + '</span></a>').join('') + '</div>'
+          : '<p class="muted">Nothing found for "' + RB.esc(q) + '".</p>';
+        $$('.qs-row', out).forEach((a) => a.addEventListener('click', () => m.close()));
+      } catch (e) { if (my === seq) out.innerHTML = '<div class="msg error">' + RB.esc(e.message) + '</div>'; }
+    };
+    inp.addEventListener('input', () => { clearTimeout(t); t = setTimeout(go, 250); });
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const a = $('.qs-row', out); if (a) { a.click(); location.hash = a.getAttribute('href'); } } });
+    setTimeout(() => inp.focus(), 30);
+  };
+
+  // ---------- Automatic sign-out ----------
+  // After the number of idle minutes set in Settings (0 = never). Default 30.
+  RB.idleSignout = (() => {
+    let t;
+    const arm = () => {
+      clearTimeout(t);
+      const min = RB.profile && RB.cache.idleMinutes != null ? RB.cache.idleMinutes : 30;
+      if (!RB.profile || !min) return;
+      t = setTimeout(() => { if (RB.profile) { RB.privacy(false); $$('.modal-bg').forEach((b) => b.parentNode.removeChild(b));
+        RB.signOut('You were signed out after ' + min + ' minutes without use.'); } }, min * 60 * 1000);
+    };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => document.addEventListener(ev, arm, { passive: true, capture: true }));
+    return arm;
   })();
 
   // ---------- Back button ----------
