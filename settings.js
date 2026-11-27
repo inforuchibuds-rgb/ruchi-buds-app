@@ -1,12 +1,44 @@
 // =====================================================================
-// RUCHI BUDS APP · settings.js · Version 1.3 · 27-Nov-2026
+// RUCHI BUDS APP · settings.js · Version 1.4 · 27-Nov-2026
 // Firm details, partners and profit share, entry rules, word mark,
 // training mode and go-live, demo data, backups and the keep-awake check.
 // Module 6 adds: expense approval limit and the CA's rates for doubtful debts.
+// Module 9 adds: the last restore and restore drill, and the link to Restore a backup.
 // =====================================================================
 (function () {
   'use strict';
   const RB = window.RB, $ = RB.$, $$ = RB.$$, esc = RB.esc;
+
+  // Takes a full backup through the database and downloads it to this
+  // device: a JSON file (for restore) or an Excel workbook. Also used by
+  // the Restore screen before a restore.
+  RB.backupDownload = async (excel, progress) => {
+    const tables = await RB.rpc('rb_backup_tables');
+    const out = {}; let rows = 0;
+    for (const t of tables) {
+      out[t] = [];
+      for (let off = 0; ; off += 1000) {
+        const page = await RB.rpc('rb_backup_rows', { p_table: t, p_offset: off, p_limit: 1000 });
+        out[t].push(...page); rows += page.length;
+        if (progress) progress(t, rows);
+        if (page.length < 1000) break;
+      }
+    }
+    const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+    if (excel) {
+      const wb = XLSX.utils.book_new();
+      tables.forEach((t) => {
+        const flat = out[t].map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : v])));
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flat.length ? flat : [{}]), t.slice(0, 31));
+      });
+      XLSX.writeFile(wb, 'ruchi-buds-backup-' + stamp + '.xlsx');
+    } else {
+      const blob = new Blob([JSON.stringify({ app: 'Ruchi Buds', taken_at: new Date().toISOString(), tables: out }, null, 1)], { type: 'application/json' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ruchi-buds-backup-' + stamp + '.json'; a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    }
+    return { tables, rows };
+  };
   const TRADER_FIELDS = [['phone', 'Phone'], ['address', 'Address'], ['email', 'Email'], ['gstin', 'GSTIN'],
     ['contact_person', 'Contact person'], ['credit_limit', 'Credit limit'], ['credit_days', 'Credit days']];
 
@@ -221,7 +253,7 @@
     let log = [];
     try { log = await RB.select('backup_log', '*', (q) => q.order('at', { ascending: false }).limit(200)); } catch (e) { /* ignore */ }
     const last = (k) => log.find((r) => r.kind === k);
-    const nightly = last('nightly'), ping = last('ping'), manual = last('manual');
+    const nightly = last('nightly'), ping = last('ping'), manual = last('manual'), restore = last('restore'), drill = last('drill');
     const ageDays = (r) => r ? (Date.now() - new Date(r.at)) / 86400000 : Infinity;
     const line = (title, r, warnDays) => '<tr><th style="text-align:left">' + title + '</th><td style="text-align:left">' +
       (r ? (r.status === 'ok' && ageDays(r) <= warnDays ? RB.badge('active', 'OK') : RB.badge('locked', r.status === 'ok' ? 'Late' : 'Failed')) + ' ' +
@@ -231,37 +263,17 @@
       '<p class="muted">A Google Apps Script copies every table to Google Drive each night (last 30 days kept) and pings the database each morning so the free Supabase project never goes to sleep.</p>' +
       '<div class="grid-wrap"><table class="ticks" style="min-width:0"><tbody>' +
       line('Last nightly backup', nightly, 1.5) + line('Last keep-awake ping', ping, 1.5) + line('Last manual backup', manual, 9999) +
+      line('Last restore drill', drill, 9999) +
+      (restore ? '<tr><th style="text-align:left">Last restore</th><td style="text-align:left">' + RB.fmtDateTime(restore.at) + ' · ' + esc(restore.detail || '') + '</td></tr>' : '') +
       '</tbody></table></div>' +
       (RB.has('power.backup_now') ? '<div class="actions"><button class="primary" id="bk-json">Backup now (file for restore)</button><button id="bk-xls">Backup now (Excel)</button></div>' +
-        '<p class="muted">Take one before every module update and at each month-end. The file downloads to this device.</p><div id="bk-msg"></div>' : '');
+        '<p class="muted">Take one before every module update and at each month-end. The file downloads to this device.</p><div id="bk-msg"></div>' : '') +
+      (RB.has('power.restore') ? '<div class="actions"><a class="btn" href="#/restore">Restore a backup…</a></div>' : '');
     const run = async (excel) => {
       const msg = $('#bk-msg', el);
       msg.innerHTML = '<div class="msg info">Taking backup…</div>';
       try {
-        const tables = await RB.rpc('rb_backup_tables');
-        const out = {}; let rows = 0;
-        for (const t of tables) {
-          out[t] = [];
-          for (let off = 0; ; off += 1000) {
-            const page = await RB.rpc('rb_backup_rows', { p_table: t, p_offset: off, p_limit: 1000 });
-            out[t].push(...page); rows += page.length;
-            msg.innerHTML = '<div class="msg info">Taking backup… ' + esc(t) + ' (' + rows + ' rows so far)</div>';
-            if (page.length < 1000) break;
-          }
-        }
-        const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-        if (excel) {
-          const wb = XLSX.utils.book_new();
-          tables.forEach((t) => {
-            const flat = out[t].map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v !== null && typeof v === 'object' ? JSON.stringify(v) : v])));
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(flat.length ? flat : [{}]), t.slice(0, 31));
-          });
-          XLSX.writeFile(wb, 'ruchi-buds-backup-' + stamp + '.xlsx');
-        } else {
-          const blob = new Blob([JSON.stringify({ app: 'Ruchi Buds', taken_at: new Date().toISOString(), tables: out }, null, 1)], { type: 'application/json' });
-          const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'ruchi-buds-backup-' + stamp + '.json'; a.click();
-          setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        }
+        const { tables, rows } = await RB.backupDownload(excel, (t, n) => { msg.innerHTML = '<div class="msg info">Taking backup… ' + esc(t) + ' (' + n + ' rows so far)</div>'; });
         await RB.rpc('rb_log_backup', { p_kind: 'manual', p_status: 'ok', p_tables: tables.length, p_rows: rows, p_detail: excel ? 'Excel download' : 'JSON download' });
         drawBackup(el);
         RB.toast('Backup downloaded: ' + tables.length + ' tables, ' + rows + ' rows');
