@@ -1,18 +1,23 @@
 /**
  * =====================================================================
- * RUCHI BUDS APP · Code.gs · Version 1.0 · 26-Nov-2026
+ * RUCHI BUDS APP · Code.gs · Version 1.1 · 27-Nov-2026
  * One Google Apps Script for:
  *   - nightlyBackup(): copies every table to a dated folder in Google
  *     Drive ("Ruchi Buds Backups/2026-11-26") and keeps the last 30 days.
  *   - keepAwake(): a small daily read so the free Supabase project never
  *     pauses after 7 quiet days.
- * Module 9 later adds the weekly Google Sheets copy and the restore.
+ *   - weeklySheetsCopy(): every Monday, copies the reporting data
+ *     (accounts, monthly balances, sales, purchases, expenses, loans) to
+ *     the Google Sheet "Ruchi Buds Reporting" that feeds Looker Studio.
+ * Module 9 later adds the restore.
  *
  * Set-up (once): Project Settings -> Script Properties, add
  *   SUPABASE_URL          your Project URL
  *   SUPABASE_SERVICE_KEY  the secret key, sb_secret_... (keep it secret:
  *                         it lives only here, never in the app's files)
  *   ALERT_EMAIL           optional: who gets an email if a backup fails
+ *   REPORT_SHEET_ID       optional: the reporting sheet to fill. Left out,
+ *                         the first copy makes one and remembers it.
  * Then run setupTriggers() once and allow the permissions it asks for.
  * =====================================================================
  */
@@ -93,6 +98,81 @@ function nightlyBackup() {
   }
 }
 
+/**
+ * Weekly copy of the reporting data to Google Sheets, one tab per dataset.
+ * Each run replaces the tabs, so the sheet always matches the app.
+ * Amounts are in rupees; DEMO rows are marked in the is_demo column.
+ */
+function weeklySheetsCopy() {
+  var started = new Date(), totalRows = 0, sets = [];
+  try {
+    var ss = reportSheet_();
+    sets = rpc_('rb_sheets_datasets', {});
+    var counts = {};
+    sets.forEach(function (name) {
+      var rows = [];
+      for (var off = 0; ; off += PAGE) {
+        var page = rpc_('rb_sheets_rows', { p_name: name, p_offset: off, p_limit: PAGE });
+        rows = rows.concat(page);
+        if (page.length < PAGE) break;
+      }
+      writeTab_(ss, name, rows);
+      counts[name] = rows.length;
+      totalRows += rows.length;
+    });
+    var about = [['Ruchi Buds reporting data'], ['Copied at', started],
+                 ['Made by the weekly Apps Script copy. Do not type in these tabs: the next copy replaces them.'], [''], ['Tab', 'Rows']];
+    sets.forEach(function (n) { about.push([n, counts[n]]); });
+    var a = ss.getSheetByName('_about') || ss.insertSheet('_about', 0);
+    a.clear();
+    about.forEach(function (r, i) { a.getRange(i + 1, 1, 1, r.length).setValues([r]); });
+    var first = ss.getSheets()[0];
+    if (first.getName() === 'Sheet1' && first.getLastRow() === 0) ss.deleteSheet(first);
+    rpc_('rb_set_report_sheet', { p_url: ss.getUrl() });
+    rpc_('rb_log_backup', { p_kind: 'sheets', p_status: 'ok', p_tables: sets.length, p_rows: totalRows,
+                            p_detail: 'Google Sheet ' + ss.getName() });
+    Logger.log('Sheets copy done: ' + sets.length + ' tabs, ' + totalRows + ' rows. ' + ss.getUrl());
+  } catch (e) {
+    try { rpc_('rb_log_backup', { p_kind: 'sheets', p_status: 'failed', p_tables: sets.length, p_rows: totalRows, p_detail: e.message }); } catch (x) {}
+    notify_('Ruchi Buds: weekly Google Sheets copy FAILED', 'The copy failed:\n\n' + e.message +
+            '\n\nOpen the Apps Script, check the Script Properties, and run weeklySheetsCopy by hand.');
+    throw e;
+  }
+}
+
+/** The reporting spreadsheet: REPORT_SHEET_ID, or a new one (remembered). */
+function reportSheet_() {
+  var p = PropertiesService.getScriptProperties();
+  var id = p.getProperty('REPORT_SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  var ss = SpreadsheetApp.create('Ruchi Buds Reporting');
+  p.setProperty('REPORT_SHEET_ID', ss.getId());
+  return ss;
+}
+
+/** Replaces one tab with the rows (objects), header from the first row's keys. */
+function writeTab_(ss, name, rows) {
+  var sh = ss.getSheetByName(name) || ss.insertSheet(name);
+  sh.clear();
+  if (!rows.length) { sh.getRange(1, 1).setValue('(no rows)'); return; }
+  var head = Object.keys(rows[0]);
+  var data = [head].concat(rows.map(function (r) {
+    return head.map(function (k) {
+      var v = r[k];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) return new Date(v + 'T00:00:00');   // a real date for Looker
+      if (typeof v === 'object') return JSON.stringify(v);
+      return v;
+    });
+  }));
+  for (var i = 0; i < data.length; i += 5000) {
+    var part = data.slice(i, i + 5000);
+    sh.getRange(i + 1, 1, part.length, head.length).setValues(part);
+  }
+  sh.setFrozenRows(1);
+  sh.getRange(1, 1, 1, head.length).setFontWeight('bold');
+}
+
 /** Keeps the newest KEEP_DAYS daily folders and bins the rest. */
 function removeOldBackups_(root) {
   var cutoff = new Date(Date.now() - KEEP_DAYS * 86400000);
@@ -115,16 +195,18 @@ function notify_(subject, body) {
 }
 
 /**
- * Run once. Creates the two daily timers (India time):
- *   02:00-03:00 nightly backup, 06:00-07:00 keep-awake ping.
+ * Run once. Creates the timers (India time):
+ *   02:00-03:00 nightly backup, 06:00-07:00 keep-awake ping,
+ *   Mondays 04:00-05:00 the weekly Google Sheets copy.
  * Running it again replaces the timers, so it is safe to repeat.
  */
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['nightlyBackup', 'keepAwake'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+    if (['nightlyBackup', 'keepAwake', 'weeklySheetsCopy'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('nightlyBackup').timeBased().everyDays(1).atHour(2).inTimezone('Asia/Kolkata').create();
   ScriptApp.newTrigger('keepAwake').timeBased().everyDays(1).atHour(6).inTimezone('Asia/Kolkata').create();
+  ScriptApp.newTrigger('weeklySheetsCopy').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(4).inTimezone('Asia/Kolkata').create();
   keepAwake();
-  Logger.log('Timers set. The first backup runs tonight between 2 and 3 AM. Run nightlyBackup now to test it.');
+  Logger.log('Timers set. The first backup runs tonight between 2 and 3 AM. Run nightlyBackup and weeklySheetsCopy now to test them.');
 }
