@@ -165,7 +165,7 @@
 
   // ---------- the Production window ----------
   async function productionWindow(body) {
-    const back = $('.page-head .back'); if (back) { back.href = '#/production'; back.textContent = '‹ Production'; }
+    const back = $('.page-head .back'); if (back) { back.href = '#/production'; back.hidden = false; back.textContent = '‹ Production'; }
     const h1 = $('.page-head h1'); if (h1) h1.textContent = 'Production window';
     if (!RB.has('production.add')) { body.innerHTML = '<div class="msg error">You do not have the right to enter production batches.</div>'; return; }
     body.innerHTML = '<p class="muted">Loading…</p>';
@@ -394,7 +394,7 @@
 
   // ---------- the batch window ----------
   async function batchWindow(body, id) {
-    const back = $('.page-head .back'); if (back) { back.href = '#/production'; back.textContent = '‹ Production'; }
+    const back = $('.page-head .back'); if (back) { back.href = '#/production'; back.hidden = false; back.textContent = '‹ Production'; }
     body.innerHTML = '<p class="muted">Loading…</p>';
     const x = await RB.rpc('rb_batch_detail', { p_id: id });
     const b = x.batch, can = x.can, cost = can.see_cost, u = b.base_unit;

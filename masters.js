@@ -365,7 +365,7 @@
   // ===================================================================
   const TRADER_LABELS = { phone: 'Phone', address: 'Address', email: 'Email', gstin: 'GSTIN', contact_person: 'Contact person', credit_limit: 'Credit limit', credit_days: 'Credit days' };
 
-  RB.screens.customers = async (body) => {
+  RB.screens.customers = async (body, arg) => {
     const d = await M.load(['customers']);
     let promoOnly = false;
     body.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('customers.add') ? '<button class="primary" id="cu-add">+ Add customer</button>' : '') +
@@ -393,6 +393,8 @@
       e.target.textContent = promoOnly ? 'Show everyone' : 'Promotions list';
     });
     const a = $('#cu-add', body); if (a) a.addEventListener('click', () => M.customerModal(null, () => RB.route()));
+    const pick = arg && d.customers.find((x) => String(x.id) === String(arg));  // from Quick search
+    if (pick) M.customerModal(pick, () => RB.route());
   };
 
   // Add or change a customer. done(id) runs after saving. Used by the Sales screen later.
@@ -445,7 +447,7 @@
   // ===================================================================
   // Suppliers screen
   // ===================================================================
-  RB.screens.suppliers = async (body) => {
+  RB.screens.suppliers = async (body, arg) => {
     const d = await M.load(['suppliers']);
     const owed = {};
     if (RB.purchases && (RB.has('purchases.view') || RB.has('suppliers.view'))) {
@@ -469,6 +471,8 @@
     grid.on('rowClick', (e, row) => M.supplierModal(d.suppliers.find((x) => x.id === row.getData().id), () => RB.route()));
     $('#su-xls', body).addEventListener('click', () => RB.downloadExcel(grid, 'Suppliers'));
     const a = $('#su-add', body); if (a) a.addEventListener('click', () => M.supplierModal(null, () => RB.route()));
+    const pick = arg && d.suppliers.find((x) => String(x.id) === String(arg));  // from Quick search
+    if (pick) M.supplierModal(pick, () => RB.route());
   };
 
   // Add or change a supplier. done(id) runs after saving. Used by the Purchase window later.

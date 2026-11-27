@@ -77,6 +77,18 @@ select t_ok((rb_report_dashboard('2026-11-30')->>'margin_ok')::boolean, 'The Acc
 select t_err($$select rb_post_year_end('2026-03-31')$$, 'right to close the year');
 select t_err($$select rb_save_report_links('{"looker_url": "https://lookerstudio.google.com/reporting/abc"}')$$, 'right to change the report links');
 
+-- 1b. Quick search (version 1.1): only what the person may see
+select set_config('request.jwt.claim.sub', :'acc', false);
+select t_ok((select count(*) from rb_quick_search('a')) = 0, 'Search needs at least 2 letters');
+select t_ok(exists (select 1 from rb_quick_search('DEMO/') where kind = 'Journal' and link like '#/accounts/j%'), 'The Accountant finds journals by number');
+select t_ok(exists (select 1 from rb_quick_search((select name from customers where is_demo order by id limit 1)) where kind = 'Customer'), 'and customers by name');
+select t_ok(exists (select 1 from rb_quick_search((select invoice_no from sales where invoice_no is not null order by id limit 1)) where kind = 'Invoice'), 'and invoices by number');
+select t_ok(exists (select 1 from rb_quick_search((select po_no from purchases where po_no is not null order by id limit 1)) where kind = 'Purchase'), 'and purchases by PO number');
+select t_ok((select count(*) from rb_quick_search('50%_')) = 0, 'Wildcards are taken literally');
+select set_config('request.jwt.claim.sub', :'mgr', false);
+select t_ok(not exists (select 1 from rb_quick_search('DEMO/') where kind = 'Journal'), 'A Manager does not see journals in search');
+select set_config('request.jwt.claim.sub', :'acc', false);
+
 -- 2. The DEMO books: statements hold together for several periods
 select t_ok(t_fs_ok('2026-04-01', '2026-11-30', true), 'FY to date (DEMO): balance sheet balances, profit agrees, cash flow = change in cash');
 select t_ok(t_fs_ok('2026-11-01', '2026-11-30', true), 'November (DEMO)');

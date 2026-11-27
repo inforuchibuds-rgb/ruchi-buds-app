@@ -1,6 +1,7 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 8: Reports and Sheets copy
--- File: 08_reports.sql · Version 1.0 · 27-Nov-2026
+-- File: 08_reports.sql · Version 1.1 · 27-Nov-2026
+-- 1.1: Quick search (top bar) across invoices, purchases, journals, customers and suppliers.
 --
 -- What this file sets up:
 --   The Reports screen (Director, FC and Accountant):
@@ -863,5 +864,51 @@ grant execute on function
   rb_report_sales(date, date, boolean), rb_report_purchases(date, date, boolean), rb_save_report_links(jsonb),
   rb_sheets_datasets(), rb_sheets_rows(text, int, int), rb_set_report_sheet(text)
 to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Quick search (version 1.1): find an invoice, purchase, journal,
+-- customer or supplier by its number, name or phone. Each kind is only
+-- searched when the person may see that screen.
+-- ---------------------------------------------------------------------
+create or replace function rb_quick_search(p_q text)
+returns table (kind text, label text, detail text, link text, on_date date)
+language plpgsql stable security definer set search_path = public as $$
+declare v_q text := trim(coalesce(p_q, '')); v_like text;
+begin
+  if rb_current_user_id() is null then raise exception 'Please sign in.'; end if;
+  if length(v_q) < 2 then return; end if;
+  v_like := '%' || replace(replace(replace(v_q, '\', '\\'), '%', '\%'), '_', '\_') || '%';
+  if rb_has('customers.view') then
+    return query select 'Customer'::text, c.code || ' ' || c.name, coalesce(c.phone, ''), '#/customers/' || c.id, null::date
+      from customers c where c.code ilike v_like or c.name ilike v_like or c.phone ilike v_like or c.gstin ilike v_like
+      order by c.name limit 8;
+  end if;
+  if rb_has('suppliers.view') then
+    return query select 'Supplier'::text, s.code || ' ' || s.name, coalesce(s.phone, ''), '#/suppliers/' || s.id, null::date
+      from suppliers s where s.code ilike v_like or s.name ilike v_like or s.phone ilike v_like or s.gstin ilike v_like
+      order by s.name limit 8;
+  end if;
+  if rb_has('invoices.view') or rb_has('sales.view') then
+    return query select 'Invoice'::text, coalesce(x.invoice_no, 'Draft sale'), x.bill_name || ' · ' || x.status,
+        case when rb_has('invoices.view') then '#/invoices/' else '#/sales/' end || x.id, x.invoice_date
+      from sales x where x.invoice_no ilike v_like or x.bill_name ilike v_like or x.bill_phone ilike v_like
+      order by x.invoice_date desc, x.id desc limit 8;
+  end if;
+  if rb_has('purchases.view') then
+    return query select 'Purchase'::text, coalesce(x.po_no, 'Purchase ' || x.id), s.name || coalesce(' · bill ' || x.bill_no, '') || ' · ' || x.status,
+        '#/purchases/' || x.id, coalesce(x.po_date, x.purchase_date)
+      from purchases x join suppliers s on s.id = x.supplier_id
+      where x.po_no ilike v_like or x.bill_no ilike v_like or s.name ilike v_like
+      order by coalesce(x.po_date, x.purchase_date) desc nulls last, x.id desc limit 8;
+  end if;
+  if rb_has('accounts.view') then
+    return query select 'Journal'::text, coalesce(j.journal_no, 'Draft journal'), j.narration || ' · ' || j.status,
+        '#/accounts/j' || j.id, j.journal_date
+      from journals j where j.journal_no ilike v_like or j.narration ilike v_like or j.source_ref ilike v_like
+      order by j.journal_date desc, j.id desc limit 8;
+  end if;
+end $$;
+revoke execute on function rb_quick_search(text) from public, anon;
+grant execute on function rb_quick_search(text) to authenticated;
 
 -- End of 08_reports.sql

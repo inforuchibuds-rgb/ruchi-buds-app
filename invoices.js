@@ -69,7 +69,7 @@
 
   I.window = async (body, id, base) => {
     const back = $('.page-head .back');
-    if (back) { back.href = '#/' + base; back.textContent = '‹ ' + (base === 'invoices' ? 'Invoices' : 'Sales'); }
+    if (back) { back.href = '#/' + base; back.hidden = false; back.textContent = '‹ ' + (base === 'invoices' ? 'Invoices' : 'Sales'); }
     const x = await RB.rpc('rb_sale_detail', { p_id: id });
     const s = x.sale, f = x.firm || {}, tax = s.doc_type === 'tax_invoice';
     const h1 = $('.page-head h1'); if (h1) h1.innerHTML = esc(s.invoice_no) + RB.demoBadge(s);

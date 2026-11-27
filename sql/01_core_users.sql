@@ -1,6 +1,7 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 1: Core and users
--- File: 01_core_users.sql · Version 1.0 · 26-Nov-2026
+-- File: 01_core_users.sql · Version 1.1 · 27-Nov-2026
+-- 1.1: automatic sign-out after a set number of idle minutes (Settings).
 --
 -- What this file sets up:
 --   Firm settings, user categories (roles), the screen x action tick
@@ -48,6 +49,9 @@ create table if not exists app_settings (
   updated_by              uuid
 );
 insert into app_settings (id) values (1) on conflict (id) do nothing;
+-- 1.1: sign out automatically after this many minutes without use (0 = never).
+alter table app_settings add column if not exists idle_signout_minutes int not null default 30
+  check (idle_signout_minutes between 0 and 480);
 
 -- Screens of the app. Later modules switch "available" on as they ship.
 create table if not exists screens (
@@ -822,6 +826,9 @@ create or replace function rb_save_settings(p jsonb)
 returns void language plpgsql security definer set search_path = public as $$
 declare v_me uuid := rb_require('settings.edit', 'change settings');
 begin
+  if (p->>'idle_signout_minutes')::int not between 0 and 480 then
+    raise exception 'Automatic sign-out must be between 0 (never) and 480 minutes.';
+  end if;
   update app_settings set
     firm_name   = coalesce(nullif(trim(p->>'firm_name'), ''), firm_name),
     legal_form  = coalesce(p->>'legal_form', legal_form),
@@ -839,6 +846,7 @@ begin
       case when p ? 'trader_required_fields' then '{}'::text[] else trader_required_fields end),
     direct_purchase_approval_limit_paise = (p->>'direct_purchase_approval_limit_paise')::bigint,
     failed_login_limit = coalesce((p->>'failed_login_limit')::int, failed_login_limit),
+    idle_signout_minutes = coalesce((p->>'idle_signout_minutes')::int, idle_signout_minutes),
     wordmark_url = case when p ? 'wordmark_url' then nullif(p->>'wordmark_url', '') else wordmark_url end,
     updated_at = now(), updated_by = v_me
   where id = 1;

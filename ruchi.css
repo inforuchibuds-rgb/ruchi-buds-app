@@ -56,6 +56,9 @@ h1 { font-size: 1.4rem; } h2 { font-size: 1.15rem; } h3 { font-size: 1rem; }
 main { max-width: 1200px; margin: 0 auto; padding: 1rem; }
 .page-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin-bottom: 1rem; }
 .page-head h1 { margin: 0; flex: 1 1 auto; }
+[hidden] { display: none !important; }
+.nav-btns { display: flex; gap: .5rem; flex: 0 0 auto; }
+.nav-btns .btn, .nav-btns button { text-decoration: none; }
 .back { text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; min-height: var(--tap); }
 .card {
   background: var(--white); border: 1px solid var(--line); border-radius: var(--radius);
@@ -154,6 +157,26 @@ table.ticks .soon { font-size: .75rem; color: var(--muted); font-weight: 400; }
 }
 .modal { background: var(--white); border-radius: 10px; width: 100%; max-width: 560px; padding: 1.25rem; }
 .modal.wide { max-width: 900px; }
+.modal { position: relative; }
+.modal-x { position: absolute; top: .4rem; right: .4rem; min-height: 0; width: 2.5rem; height: 2.5rem; padding: 0;
+  border: none; background: transparent; font-size: 1.2rem; line-height: 1; color: var(--brown); }
+.modal-x:hover { background: #FFF3D6; }
+.modal > h2:first-of-type { padding-right: 2.5rem; }
+.page-extra { display: flex; flex-wrap: wrap; gap: .4rem; width: 100%; justify-content: flex-end; }
+.page-extra button { min-height: 2.25rem; padding: .3rem .7rem; font-size: .9rem; }
+.qs-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.qs-row { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; padding: .6rem .75rem; text-decoration: none; color: inherit; border-bottom: 1px solid var(--line); }
+.qs-row:last-child { border-bottom: none; }
+.qs-row:hover, .qs-row:focus { background: #FFF3D6; }
+@media (max-width: 600px) { .banner .lbl { display: none; } .page-extra { justify-content: flex-start; } }
+/* Privacy: the Hide button blurs everything until tapped */
+body.privacy > *:not(#privacy) { filter: blur(18px); }
+#privacy { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center;
+  background: rgba(74,41,35,.35); cursor: pointer; }
+#privacy > div { background: var(--white); color: var(--brown); border-radius: 12px; padding: 1.25rem 1.5rem; text-align: center;
+  display: flex; flex-direction: column; gap: .35rem; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+#privacy span { font-size: 2rem; }
+#privacy small { opacity: .8; }
 .modal h2 { margin-bottom: 1rem; }
 
 /* ---------- login ---------- */
@@ -220,7 +243,7 @@ table.inv-lines tfoot td { font-weight: 700; border-top: 2px solid var(--line); 
 main.public { max-width: 900px; margin: 0 auto; padding: 1rem; }
 
 @media print {
-  .banner, .training-strip, .actions, .tabs, .no-print, .page-head .back, #page-tools { display: none !important; }
+  .banner, .training-strip, .actions, .tabs, .no-print, .page-head .back, .nav-btns, .page-extra, .modal-x, #page-tools { display: none !important; }
   body { background: #FFF; }
   main { padding: 0 !important; }
   .invoice { border: 0; padding: 0; }
