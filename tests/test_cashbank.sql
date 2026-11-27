@@ -52,7 +52,7 @@ select t_ok((select outstanding_paise from expenses where is_demo and supplier_i
             'DEMO: the Mehta & Co bill of ₹4,500 is still unpaid');
 select t_ok((select count(*) from money_transfers where is_demo) = 2 and (select count(*) from partner_entries where is_demo) = 2
         and (select count(*) from cash_counts where is_demo) = 1, 'DEMO transfers, partner entries and a cash count');
-select t_ok((select count(*) from month_end_runs where is_demo and status = 'posted') = 2, 'DEMO: both month-end steps posted for Nov 2026');
+select t_ok((select count(*) from month_end_runs where is_demo and status = 'posted' and kind in ('absorption', 'doubtful_debts')) = 2, 'DEMO: both month-end steps posted for Nov 2026');
 select t_ok((select amount_paise from month_end_runs where is_demo and kind = 'doubtful_debts') = 65000,
             'DEMO provision: 10% of the ₹6,500 opening balance not on an invoice');
 select t_ok((select amount_paise from month_end_runs where is_demo and kind = 'absorption') > 0, 'DEMO labour and overheads added to stock');

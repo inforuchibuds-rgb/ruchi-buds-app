@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · cashbank.js · Version 1.0 · 27-Nov-2026
+// RUCHI BUDS APP · cashbank.js · Version 1.1 · 27-Nov-2026
 // Module 6 screen "Cash, bank and expenses": cash and bank balances and
 // the cash book, expenses (paid at once or on credit, with a bill photo,
 // approval above the Settings limit), other money received, moving money
@@ -552,6 +552,7 @@
         tick(st.draft_journals === 0, st.draft_journals ? st.draft_journals + ' draft journal(s) in Accounts' : 'No draft journals') +
         st.cash.map((c) => tick(c.last_count && c.last_count >= st.month_end, esc(c.name) + ': ' + (c.last_count ? 'last counted ' + RB.fmtDate(c.last_count) : 'not counted yet'))).join('') +
         st.banks.map((b) => tick(b.status === 'done', esc(b.name) + ': bank reconciliation ' + (b.status === 'done' ? 'finished' : b.status === 'draft' ? 'started, not finished' : 'not started'))).join('') +
+        (RB.screens.loans ? tick(st.runs.some((r) => r.kind === 'loans_leases' && r.status === 'posted'), 'Before step 1: loans and leases month-end (Loans and leases → Month-end)') : '') +
         tick(st.runs.some((r) => r.kind === 'absorption' && r.status === 'posted'), 'Step 1: kitchen labour and overheads added to stock (' + st.batches + ' batch(es) this month)') +
         tick(st.runs.some((r) => r.kind === 'doubtful_debts' && r.status === 'posted'), 'Step 2: provision for doubtful debts') +
         tick(st.locked, 'Lock the month (Accounts → Month lock), once everything above is done') + '</ol>' +
