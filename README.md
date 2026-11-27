@@ -21,6 +21,7 @@ Operations and accounts for Ruchi Buds (entity E002): purchases, stock, producti
 
 ## Setting up and testing
 
+- [Buttons on every screen (Back, Home, Close, Hide)](docs/app-buttons.md)
 - [Module 1 setup guide](docs/module-1-setup-guide.md)
 - [Module 1 test checklist](docs/module-1-test-checklist.md)
 - [Module 2 setup guide](docs/module-2-setup-guide.md)

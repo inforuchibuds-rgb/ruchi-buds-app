@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.1 · 27-Nov-2026
+// RUCHI BUDS APP · core.js · Version 1.2 · 27-Nov-2026 (Back, Home, Close and Hide buttons)
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -91,7 +91,8 @@
   RB.modal = (html, opts) => {
     const bg = document.createElement('div');
     bg.className = 'modal-bg';
-    bg.innerHTML = '<div class="modal ' + ((opts && opts.wide) ? 'wide' : '') + '" role="dialog" aria-modal="true">' + html + '</div>';
+    bg.innerHTML = '<div class="modal ' + ((opts && opts.wide) ? 'wide' : '') + '" role="dialog" aria-modal="true">' +
+      '<button type="button" class="modal-x" data-close aria-label="Close" title="Close">✕</button>' + html + '</div>';
     document.body.appendChild(bg);
     const close = () => bg.remove();
     bg.addEventListener('click', (e) => { if (e.target === bg) close(); });
@@ -151,7 +152,11 @@
     // A customer opening a statement link: show just that statement, no sign-in.
     const pub = location.hash.match(/^#\/s\/([0-9a-f]{20,})$/);
     if (pub && RB.invoices) return RB.invoices.publicStatement(pub[1]);
-    window.addEventListener('hashchange', () => RB.route());
+    window.addEventListener('hashchange', () => {
+      clearTimeout(RB.backTimer);
+      if (RB.goingBack) { RB.goingBack = false; RB.navDepth = Math.max(0, RB.navDepth - 1); } else RB.navDepth++;
+      RB.route();
+    });
     const { data } = await RB.sb.auth.getSession();
     if (data.session) await RB.afterSignIn(false);
     else RB.showLogin('signin');
@@ -247,13 +252,59 @@
       '<header class="banner"><a href="#/" aria-label="Home"><img class="wordmark" src="' + RB.esc(logo) + '" alt="Ruchi Buds"></a>' +
       '<div class="spacer"></div><div class="who">' + RB.esc(p.short_name || p.full_name) +
       '<small>' + RB.esc(p.category) + '</small></div>' +
+      '<button id="btn-hide" type="button" title="Hide the screen (Ctrl+Shift+H)">🙈 Hide</button>' +
       '<button id="btn-signout" type="button">Sign out</button></header>' +
       (s.training_mode ? '<div class="training-strip">Training mode: entries made now are cleared at go-live</div>' : '') +
       '<main id="page">' +
-      (opts && opts.home ? '' : '<div class="page-head"><a class="back" href="#/">‹ Home</a><h1>' + RB.esc(title) + '</h1><div id="page-tools" class="actions" style="margin:0"></div></div>') +
+      (opts && opts.home ? '' : '<div class="page-head"><div class="nav-btns"><button type="button" id="nav-back">‹ Back</button><a class="btn back" href="#/" hidden></a><a class="btn" id="nav-home" href="#/">⌂ Home</a></div><h1>' + RB.esc(title) + '</h1><div id="page-tools" class="actions" style="margin:0"></div></div>') +
       '<div id="page-body"></div></main>';
     $('#btn-signout').addEventListener('click', () => RB.signOut());
+    $('#btn-hide').addEventListener('click', () => RB.privacy(true));
+    if ($('#nav-back')) $('#nav-back').addEventListener('click', RB.goBack);
     return $('#page-body');
+  };
+
+  // ---------- Privacy: blur the screen ----------
+  // Hide button, Ctrl+Shift+H, after 3 minutes without use, and when the app
+  // goes into the background. Tap or click anywhere (or any key) to show it again.
+  RB.privacy = (on) => {
+    if (!RB.profile) return;
+    const cover = $('#privacy');
+    if (on && !cover) {
+      const c = document.createElement('div');
+      c.id = 'privacy'; c.setAttribute('role', 'button'); c.tabIndex = 0;
+      c.innerHTML = '<div><span aria-hidden="true">🙈</span><b>Screen hidden</b><small>Tap or click anywhere to show it</small></div>';
+      c.addEventListener('click', () => RB.privacy(false));
+      document.body.appendChild(c); document.body.classList.add('privacy'); c.focus();
+    } else if (!on && cover) { cover.parentNode.removeChild(cover); document.body.classList.toggle('privacy', false); }
+  };
+  RB.IDLE_MS = 3 * 60 * 1000;
+  (() => {
+    let t;
+    const poke = () => { clearTimeout(t); t = setTimeout(() => RB.privacy(true), RB.IDLE_MS); };
+    ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => document.addEventListener(ev, poke, { passive: true, capture: true }));
+    poke();
+    document.addEventListener('visibilitychange', () => { if (document.hidden) RB.privacy(true); });
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && (e.key === 'H' || e.key === 'h')) { e.preventDefault(); RB.privacy(!$('#privacy')); return; }
+      if ($('#privacy')) { e.preventDefault(); e.stopPropagation(); RB.privacy(false); return; }
+      if (e.key === 'Escape') { const x = $$('.modal-bg .modal-x').pop(); if (x) x.click(); }
+    }, true);
+  })();
+
+  // ---------- Back button ----------
+  // The installed app (home-screen icon) has no browser Back button, so every
+  // screen has its own. It goes to the previous screen; if there is none (the
+  // app was just opened), it goes one level up: a record to its list, a list to Home.
+  RB.navDepth = 0;
+  RB.goBack = () => {
+    // Going up replaces the current entry, so Back never bounces between a record and its list.
+    const up = () => { const [name, arg] = location.hash.replace(/^#\/?/, '').split('/'); RB.goingBack = true; location.replace(arg ? '#/' + name : '#/'); };
+    if (RB.navDepth > 0) {
+      RB.goingBack = true; history.back();
+      // If nothing happened (no earlier page in this app), go up a level instead.
+      RB.backTimer = setTimeout(() => { RB.goingBack = false; RB.navDepth = 0; up(); }, 400);
+    } else up();
   };
 
   // ---------- routing ----------

@@ -225,7 +225,7 @@
   // ===================================================================
   async function saleForm(body) {
     if (!RB.has('sales.add')) { body.innerHTML = '<div class="msg error">You do not have the right to make sales.</div>'; return; }
-    const back = $('.page-head .back'); if (back) { back.href = '#/sales'; back.textContent = '‹ Sales'; }
+    const back = $('.page-head .back'); if (back) { back.href = '#/sales'; back.hidden = false; back.textContent = '‹ Sales'; }
     const h1 = $('.page-head h1'); if (h1) h1.textContent = 'New sale';
     const d = await lists();
     const canRate = RB.has('sales.edit'), canOverride = RB.has('sales.approve');

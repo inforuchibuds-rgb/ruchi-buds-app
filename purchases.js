@@ -337,7 +337,7 @@
   // ===================================================================
   async function purchaseWindow(body, id) {
     const h1 = $('.page-head h1'); const back = $('.page-head .back');
-    if (back) { back.href = '#/purchases'; back.textContent = '‹ Purchases'; }
+    if (back) { back.href = '#/purchases'; back.hidden = false; back.textContent = '‹ Purchases'; }
     body.innerHTML = '<p class="muted">Loading…</p>';
     const [d, x] = await Promise.all([lists(), RB.rpc('rb_purchase_detail', { p_id: id })]);
     const p = x.purchase, can = x.can, lines = x.lines;
