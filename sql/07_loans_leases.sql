@@ -369,6 +369,11 @@ begin
         raise exception 'The instalment of % does not even cover the interest of %. Check the instalment and the rate.', rb_pur_fmt(round(v_pmt)::bigint), rb_pur_fmt(v_int);
       end if;
       if v_last or v_pr >= bal - v_res then v_pr := bal; v_last := true; end if;
+      -- A fixed payment that misses the last balance by paise only (rounding of the
+      -- rate): keep the payment as agreed and let the finance charge take the paise.
+      if v_last and p_pmt is not null and v_res = 0 and v_due > p_start and abs(round(v_pmt)::bigint - bal - v_int) <= 100 then
+        v_int := round(v_pmt)::bigint - bal;
+      end if;
     elsif p_method = 'equal_principal' then
       v_pr := least(v_eq, bal);
       if v_last or v_pr >= bal - v_res then v_pr := bal; v_last := true; end if;
@@ -1598,7 +1603,7 @@ begin
   if not (rb_has('loans.view') or rb_has('accounts.view')) then raise exception 'You do not have the right to see loans and leases.'; end if;
   return jsonb_build_object('as_of', v_to,
     'loans', coalesce((select jsonb_agg(x order by x.kind, x.loan_no) from (
-      select l.id, l.loan_no, l.kind, l.name, l.lender, l.lender_type, l.status, l.account_code, l.annual_rate, l.rate_type, l.emi_paise,
+      select l.id, l.loan_no, l.kind, l.name, l.lender, l.lender_type, l.status, l.account_code, l.annual_rate, l.effective_rate, l.rate_type, l.emi_paise,
              l.is_demo, l.asset_name, l.start_date, l.is_takeon,
              (select coalesce(local_name, name) from accounts where code = l.account_code) account_name,
              b.owed owed_paise, b.accrued accrued_paise, b.asset - b.depreciation carrying_paise,
