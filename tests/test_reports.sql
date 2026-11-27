@@ -84,7 +84,10 @@ select t_ok(t_fs_ok('2026-10-01', '2026-10-31', true), 'October (DEMO)');
 select t_ok(t_fs_ok('2026-11-10', '2026-11-20', true), 'Any dates (DEMO)');
 select t_ok(t_fs_ok('2026-04-01', '2026-11-30', false), 'Without the DEMO entries');
 select t_ok((rb_financial_statements('2026-11-01', '2026-11-30')->>'prev_from') = '2026-10-01'
-        and (rb_financial_statements('2025-04-01', '2026-03-31')->>'prev_from') = '2024-04-01', 'Comparatives: previous month, previous year');
+        and (rb_financial_statements('2025-04-01', '2026-03-31')->>'prev_from') = '2024-04-01'
+        and (rb_financial_statements('2026-04-01', '2026-11-30')->>'prev_from') = '2025-04-01'
+        and (rb_financial_statements('2026-04-01', '2026-11-30')->>'prev_to') = '2025-11-30'
+        and (rb_financial_statements('2026-04-01', '2026-11-30')->>'bs_prev_date') = '2026-03-31', 'Comparatives: previous month, previous year, same period last year');
 -- Current maturities of long-term loans = what module 7 says falls due within 12 months
 select t_ok((rb_financial_statements('2026-11-30', '2026-11-30')->'bs'->>'current_maturities')::bigint =
             (select sum(within_12_paise) from jsonb_to_recordset(rb_loans_summary('2026-11-30')->'loans') as x(within_12_paise bigint, account_code text, status text)

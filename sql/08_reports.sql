@@ -213,7 +213,11 @@ create or replace function rb_rp_prev(p_from date, p_to date)
 returns table (prev_from date, prev_to date) language plpgsql immutable as $$
 declare n int;
 begin
-  if extract(day from p_from) = 1 and (p_to + 1) = date_trunc('month', p_to + 1)::date then
+  -- Year to date (from 1 April, less than a full year): the same dates a year earlier.
+  if extract(month from p_from) = 4 and extract(day from p_from) = 1 and p_to < (p_from + interval '1 year')::date - 1 then
+    prev_from := (p_from - interval '1 year')::date;
+    prev_to := (p_to - interval '1 year')::date;
+  elsif extract(day from p_from) = 1 and (p_to + 1) = date_trunc('month', p_to + 1)::date then
     n := (extract(year from p_to) * 12 + extract(month from p_to)) - (extract(year from p_from) * 12 + extract(month from p_from)) + 1;
     prev_from := (p_from - make_interval(months => n))::date;
     prev_to := p_from - 1;
@@ -340,7 +344,7 @@ begin
          coalesce(sum((value)::bigint) filter (where l.section in ('EQ', 'NCL', 'CL')), 0)
   into v_assets, v_liab
   from jsonb_each_text(v_bs->'lines') x join fs_lines l on l.code = x.key;
-  return jsonb_build_object('from', p_from, 'to', p_to, 'prev_from', v_pf, 'prev_to', v_pt, 'demo', p_demo,
+  return jsonb_build_object('from', p_from, 'to', p_to, 'prev_from', v_pf, 'prev_to', v_pt, 'bs_prev_date', p_from - 1, 'demo', p_demo,
     'firm', (select jsonb_build_object('name', firm_name, 'legal_form', legal_form, 'reg_no', coalesce(firm_reg_no, llpin)) from app_settings where id = 1),
     'lines', (select jsonb_agg(to_jsonb(l) order by l.sort) from fs_lines l),
     'bs', v_bs, 'bs_prev', v_bsp, 'pl', v_pl, 'pl_prev', v_plp, 'partners', v_parts,
