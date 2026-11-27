@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · settings.js · Version 1.1 · 26-Nov-2026
+// RUCHI BUDS APP · settings.js · Version 1.2 · 27-Nov-2026
 // Firm details, partners and profit share, entry rules, word mark,
 // training mode and go-live, demo data, backups and the keep-awake check.
 // =====================================================================
@@ -25,7 +25,7 @@
       '<div class="row">' + inp('firm_reg_no', 'Firm Reg. no.', s.firm_reg_no) + inp('llpin', 'LLPIN (after LLP)', s.llpin) + inp('fssai_no', 'FSSAI no.', s.fssai_no) + '</div>' +
       '<div class="row">' + inp('gstin', 'GSTIN (if registered)', s.gstin) +
       '<div class="field"><label for="st-gstfrom">GST registered from</label><input id="st-gstfrom" type="date" value="' + esc(s.gst_registered_from || '') + '"' + dis + '>' +
-      '<div class="hint">The effective date on the GST certificate. Purchase bills dated from this day claim GST back; earlier bills add GST to the cost of stock.</div></div>' +
+      '<div class="hint">The effective date on the GST certificate. Purchase bills dated from this day claim GST back; earlier bills add GST to the cost of stock. Sales dated from this day can be Tax Invoices with GST; before it, invoices carry no GST.</div></div>' +
       inp('state_code', 'State code', s.state_code) + '</div>' +
       '<div class="field"><label for="st-address">Registered address</label><textarea id="st-address"' + dis + '>' + esc(s.address || '') + '</textarea></div>' +
       '<div class="row">' + inp('phone', 'Phone', s.phone) + inp('email', 'Email', s.email) + '</div>' +
@@ -45,6 +45,13 @@
       (s.direct_purchase_approval_limit_paise == null ? '' : s.direct_purchase_approval_limit_paise / 100) + '"' + dis + '><div class="hint">Only the Accountant, FC or a Director can approve them. Blank means no approval is needed.</div></div>' +
       '<div class="field"><label for="st-flimit">Lock an account after this many wrong passwords</label><input id="st-flimit" type="number" min="3" max="20" value="' + s.failed_login_limit + '"' + dis + '></div>' +
       '</div></section>' +
+      // ---- sales and invoices (once 05_sales_invoices.sql has run)
+      (!('sale_prices_include_gst' in s) ? '' : '<section class="card"><h2>Sales and invoices</h2>' +
+      '<label class="check"><input type="checkbox" id="st-incl"' + (s.sale_prices_include_gst !== false ? ' checked' : '') + dis + '> Prices in Masters include GST</label>' +
+      '<div class="hint">Only matters once the firm is GST registered. Ticked: a ₹100 pouch costs the customer ₹100 and the GST is worked out of it. Not ticked: GST is added on top.</div>' +
+      '<div class="field"><label for="st-footer">Line at the bottom of every invoice</label><textarea id="st-footer"' + dis + ' placeholder="e.g. Thank you! Goods once sold are taken back only if the seal is unbroken.">' + esc(s.invoice_footer || '') + '</textarea></div>' +
+      '<div class="row"><div class="field" style="flex:0 1 260px"><label for="st-linkdays">Statement links work for (days)</label><input id="st-linkdays" type="number" min="1" max="365" value="' + esc(s.statement_link_days || 30) + '"' + dis + '>' +
+      '<div class="hint">A customer can open a shared statement link without a password until it runs out. It can be switched off at any time.</div></div></div></section>') +
       // ---- word mark
       '<section class="card"><h2>Word mark</h2><p class="muted">Shown on the login screen, the banner and invoices. Replace it here when the designer sends the final file. A PNG or SVG with a see-through background, under 300 KB, works best.</p>' +
       '<div style="background:var(--ruchi-red);padding:1rem;border-radius:8px;display:inline-block"><img id="st-wm" src="' + esc(s.wordmark_url || 'assets/wordmark.png') + '" alt="Word mark" style="height:70px"></div>' +
@@ -107,6 +114,8 @@
             failed_login_limit: Number(v('flimit')), wordmark_url: wordmark || '',
           } });
           if (v('gstin').trim() || s.gst_registered_from) await RB.rpc('rb_set_gst_registration', { p_gstin: v('gstin'), p_from: v('gstfrom') || null });
+          if ($('#st-incl', body)) await RB.rpc('rb_save_sales_settings', { p: { sale_prices_include_gst: $('#st-incl', body).checked, invoice_footer: v('footer'),
+            statement_link_days: Number(v('linkdays')) || 30 } });
                     RB.cache.settings = Object.assign(RB.cache.settings || {}, { wordmark_url: wordmark || null, firm_name: v('firm_name') });
           const img = $('.banner .wordmark'); if (img) img.src = wordmark || 'assets/wordmark.png';
           $('#st-saved', body).textContent = 'Saved ' + RB.fmtDateTime(new Date());
