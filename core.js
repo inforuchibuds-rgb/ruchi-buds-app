@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.1 · 27-Nov-2026
+// RUCHI BUDS APP · core.js · Version 1.2 · 27-Nov-2026
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -296,6 +296,8 @@
         '<span class="ico" aria-hidden="true">' + (ICONS[s.icon] || '•') + '</span>' + RB.esc(s.name) +
         (s.available ? '' : '<span class="soon">Module ' + s.module + '</span>') + '</a>').join('') +
       '</nav>' + (mine.length ? '' : '<p class="muted">No screens are ticked for you yet. Ask a Director or the FC.</p>');
+    // Online shop orders waiting (module 10).
+    if (RB.shopAlerts) RB.shopAlerts(true);
   };
 
   // ---------- change password ----------

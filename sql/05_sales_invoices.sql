@@ -1,6 +1,8 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 5: Sales, invoices and customer balances (AR)
--- File: 05_sales_invoices.sql · Version 1.1 · 27-Nov-2026
+-- File: 05_sales_invoices.sql · Version 1.2 · 27-Nov-2026
+-- 1.2: a delivery charge on an invoice, and an online order keeps the price
+--      the customer was shown (used by the online shop, module 10).
 -- 1.1: bad debts. An unpaid invoice (or an earlier balance) can be written
 --      off with a reason by the FC or a Director, and money later
 --      received from that customer can be booked as bad debts recovered.
@@ -305,6 +307,9 @@ create table if not exists customer_write_offs (
 );
 create index if not exists customer_write_offs_customer_idx on customer_write_offs (customer_id);
 alter table sales add column if not exists written_off_paise bigint not null default 0;
+-- 1.2: delivery charge billed on the invoice (without GST), and the GST on it.
+alter table sales add column if not exists delivery_paise bigint not null default 0;
+alter table sales add column if not exists delivery_gst_paise bigint not null default 0;
 
 -- Money received later for a bad debt: booked as income, and the money on
 -- account it came in as is set against it (allocations with recovery_id).
@@ -353,6 +358,7 @@ create index if not exists stock_moves_sale_idx on stock_moves (sale_id) where s
 
 insert into posting_rules (event_code, line_key, side, account_code, module, label, sort) values
   ('sale',            'revenue_byproduct', 'credit', '60010130', 5, 'By-product sales (skin, trimmings)', 85),
+  ('sale',            'delivery',          'credit', '60060125', 5, 'Delivery charge billed on the invoice (without GST)', 86),
   ('sales_return',    'output_gst',        'debit',  '30030105', 5, 'Output GST given back on a credit note', 96),
   ('sales_return',    'stock_finished',    'debit',  '10030125', 5, 'Returned goods back into stock, at the cost they left at', 97),
   ('sales_return',    'cost_of_sales',     'credit', '70010160', 5, 'Cost of the returned goods taken off cost of sales', 98),
@@ -565,8 +571,10 @@ declare v_id bigint; v_date date := (p->>'invoice_date')::date; v_c customers; v
         v_gr numeric; v_tax bigint; v_gst bigint; v_cg bigint; v_sg bigint; v_ig bigint; v_rg bigint; v_rd bigint;
         v_desc text; v_no text; v_tot record; v_lines jsonb := '[]'; v_j bigint; v_cost bigint; v_cost_total bigint := 0;
         v_mark bigint; v_rev_key text; r record; v_owed bigint; v_bal bigint; v_line_id bigint;
+        v_dl bigint := coalesce(rb_int(p, 'delivery_paise'), 0); v_dtax bigint := 0; v_dgst bigint := 0; v_drate numeric;
 begin
   if v_date is null then raise exception 'Please choose the invoice date.'; end if;
+  if v_dl < 0 then raise exception 'A delivery charge cannot be negative.'; end if;
   perform rb_assert_period_open(v_date);
   select * into v_set from app_settings where id = 1;
   select * into v_c from customers where id = rb_int(p, 'customer_id');
@@ -636,7 +644,9 @@ begin
       raise exception 'No % price is set for %. Add it in Masters → Packs and prices first.', v_channel, v_desc;
     end if;
     if v_rate < 0 then raise exception 'Prices cannot be negative.'; end if;
-    if v_rate is distinct from v_list and not rb_user_has(p_actor, 'sales.edit') then
+    -- An online order (module 10) keeps the price the customer was shown.
+    if v_rate is distinct from v_list and not rb_user_has(p_actor, 'sales.edit')
+       and coalesce(current_setting('rb.shop_order', true), '') = '' then
       raise exception 'You can sell % only at the Masters price (%). Ask a Manager to change the price.', v_desc, rb_pur_fmt(v_list);
     end if;
     v_gross := case when v_pp.id is not null then round(v_packs * v_rate)::bigint else rb_sal_loose_amount(v_it.id, v_q, v_rate) end;
@@ -694,6 +704,22 @@ begin
          coalesce(sum(cgst_paise), 0) cg, coalesce(sum(sgst_paise), 0) sg, coalesce(sum(igst_paise), 0) ig,
          coalesce(sum(total_paise), 0) tot into v_tot from sale_lines where sale_id = v_id;
 
+  -- Delivery charge (1.2): on a Tax Invoice it takes the highest GST rate of
+  -- the goods (a composite supply, the goods being the principal supply).
+  if v_dl > 0 then
+    if v_type = 'tax_invoice' then
+      select max(gst_rate) into v_drate from sale_lines where sale_id = v_id;
+      if v_incl then v_dtax := round(v_dl * 100 / (100 + v_drate))::bigint; v_dgst := v_dl - v_dtax;
+      else v_dtax := v_dl; v_dgst := round(v_dl * v_drate / 100)::bigint; end if;
+    else
+      v_dtax := v_dl;
+    end if;
+    v_tot.t := v_tot.t + v_dtax;
+    if v_inter then v_tot.ig := v_tot.ig + v_dgst;
+    else v_tot.cg := v_tot.cg + round(v_dgst / 2.0)::bigint; v_tot.sg := v_tot.sg + v_dgst - round(v_dgst / 2.0)::bigint; end if;
+    v_tot.tot := v_tot.tot + v_dtax + v_dgst;
+  end if;
+
   -- Payment at the counter, and credit.
   v_paid := case when v_mode = 'credit' then 0 else coalesce(rb_int(p, 'paid_paise'), v_tot.tot) end;
   if v_paid < 0 then raise exception 'The amount paid cannot be negative.'; end if;
@@ -702,7 +728,7 @@ begin
   if v_owed > 0 and v_c.is_walk_in then
     raise exception 'A walk-in sale must be paid in full. To sell on credit, choose or add the customer.';
   end if;
-  if v_owed > 0 and v_c.credit_limit_paise is not null then
+  if v_owed > 0 and v_c.credit_limit_paise is not null and coalesce(current_setting('rb.shop_order', true), '') = '' then
     v_bal := rb_sal_book_balance(v_c.id, null);
     if v_bal + v_owed > v_c.credit_limit_paise then
       if not coalesce((p->>'override_credit_limit')::boolean, false) then
@@ -727,6 +753,9 @@ begin
       v_lines := v_lines || jsonb_build_array(jsonb_build_object('rule', 'sale.discount', 'amount_paise', r.d));
     end if;
   end loop;
+  if v_dtax > 0 then
+    v_lines := v_lines || jsonb_build_array(jsonb_build_object('rule', 'sale.delivery', 'amount_paise', v_dtax, 'narration', 'Delivery charge'));
+  end if;
   if v_tot.cg + v_tot.sg + v_tot.ig > 0 then
     v_lines := v_lines || jsonb_build_array(jsonb_build_object('rule', 'sale.output_gst', 'amount_paise', v_tot.cg + v_tot.sg + v_tot.ig,
       'narration', case when v_inter then 'IGST' else 'CGST + SGST' end));
@@ -753,7 +782,7 @@ begin
   end if;
   update sales set gross_paise = v_tot.g, discount_paise = v_tot.d, taxable_paise = v_tot.t, cgst_paise = v_tot.cg,
     sgst_paise = v_tot.sg, igst_paise = v_tot.ig, total_paise = v_tot.tot, cost_paise = v_cost_total,
-    paid_at_sale_paise = v_paid, journal_id = v_j,
+    paid_at_sale_paise = v_paid, journal_id = v_j, delivery_paise = v_dtax, delivery_gst_paise = v_dgst,
     due_date = case when v_owed > 0 then v_date + coalesce(v_c.credit_days, 0) end
   where id = v_id;
   perform rb_sal_refresh(v_id);

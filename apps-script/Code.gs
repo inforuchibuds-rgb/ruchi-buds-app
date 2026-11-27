@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- * RUCHI BUDS APP · Code.gs · Version 1.2 · 27-Nov-2026
+ * RUCHI BUDS APP · Code.gs · Version 1.3 · 27-Nov-2026
  * One Google Apps Script for:
  *   - nightlyBackup(): copies every table to a dated folder in Google
  *     Drive ("Ruchi Buds Backups/2026-11-26") and keeps the last 30 days.
@@ -16,6 +16,10 @@
  *   - restoreDrill(): reloads last night's backup into a separate TEST
  *     copy of the database and checks every table, without touching the
  *     live data.
+ *   - shopAlerts(): every 5 minutes, emails the staff chosen in the app
+ *     (Online shop orders -> Shop set-up -> Alerts) about new paid and
+ *     cash-on-delivery orders and UPI payments to check. Their phone's
+ *     mail app shows it as a notification.
  *
  * Set-up (once): Project Settings -> Script Properties, add
  *   SUPABASE_URL          your Project URL
@@ -294,6 +298,26 @@ function getOrCreateFolder_(parent, name) {
   return it.hasNext() ? it.next() : parent.createFolder(name);
 }
 
+/** Every 5 minutes: one email with the new online shop alerts. */
+function shopAlerts() {
+  var r = rpc_('rb_shop_pending_alerts', {});
+  if (!r.alerts.length) return;
+  var ids = r.alerts.map(function (a) { return a.id; });
+  if (r.to.length) {
+    if (MailApp.getRemainingDailyQuota() < r.to.length) { Logger.log('Daily email limit reached; the alerts stay in the app.'); return; }
+    var n = r.alerts.length;
+    var subject = (r.firm_name || 'Ruchi Buds') + ' online shop: ' + (n === 1 ? r.alerts[0].message : n + ' new alerts');
+    var body = r.alerts.map(function (a) {
+      return Utilities.formatDate(new Date(a.at), 'Asia/Kolkata', 'dd-MMM HH:mm') + '  ' + a.message + (a.is_demo ? ' (DEMO)' : '');
+    }).join('\n') + '\n\nOpen the app: Online shop orders.';
+    MailApp.sendEmail({ to: r.to.join(','), subject: subject.slice(0, 200), body: body });
+    Logger.log('Emailed ' + n + ' alert(s) to ' + r.to.length + ' people.');
+  } else {
+    Logger.log('No staff categories are chosen for alerts in the app: nothing emailed.');
+  }
+  rpc_('rb_shop_alerts_emailed', { p_ids: ids });
+}
+
 function notify_(subject, body) {
   try { MailApp.sendEmail(config_().alert, subject, body); } catch (e) { Logger.log('Could not send alert: ' + e.message); }
 }
@@ -301,16 +325,18 @@ function notify_(subject, body) {
 /**
  * Run once. Creates the timers (India time):
  *   02:00-03:00 nightly backup, 06:00-07:00 keep-awake ping,
- *   Mondays 04:00-05:00 the weekly Google Sheets copy.
+ *   Mondays 04:00-05:00 the weekly Google Sheets copy,
+ *   every 5 minutes the online shop alerts.
  * Running it again replaces the timers, so it is safe to repeat.
  */
 function setupTriggers() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['nightlyBackup', 'keepAwake', 'weeklySheetsCopy'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
+    if (['nightlyBackup', 'keepAwake', 'weeklySheetsCopy', 'shopAlerts'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('nightlyBackup').timeBased().everyDays(1).atHour(2).inTimezone('Asia/Kolkata').create();
   ScriptApp.newTrigger('keepAwake').timeBased().everyDays(1).atHour(6).inTimezone('Asia/Kolkata').create();
   ScriptApp.newTrigger('weeklySheetsCopy').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(4).inTimezone('Asia/Kolkata').create();
+  ScriptApp.newTrigger('shopAlerts').timeBased().everyMinutes(5).create();
   keepAwake();
   Logger.log('Timers set. The first backup runs tonight between 2 and 3 AM. Run nightlyBackup and weeklySheetsCopy now to test them.');
 }

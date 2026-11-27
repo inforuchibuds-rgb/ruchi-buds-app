@@ -54,7 +54,7 @@ select t_ok((select bool_and(invoice_date >= lag) from (select invoice_date, lag
 select t_ok(t_books_agree(), 'Books balance; stock and customer ledgers agree with the books');
 select t_ok((select count(*) from sales_returns where is_demo and status = 'posted') = 2
         and (select count(*) from sales_returns where is_demo and status = 'awaiting_approval') = 1, 'DEMO: two credit notes posted, one return waiting for approval');
-select t_ok(exists (select 1 from customer_refunds where is_demo) and (select count(*) from customer_receipts where is_demo) = 3, 'DEMO receipts and a refund');
+select t_ok(exists (select 1 from customer_refunds where is_demo) and (select count(*) from customer_receipts where is_demo and coalesce(note, '') not like 'Online order%') = 3, 'DEMO receipts and a refund');
 select t_ok((select count(*) from customer_write_offs where is_demo and status = 'posted') = 1
         and (select count(*) from bad_debt_recoveries where is_demo and status = 'posted') = 1
         and (select t_book(id, null) from customers where code = 'DEMO-C10') = 0
