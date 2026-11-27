@@ -1,6 +1,6 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 4: Stock and production
--- File: 04_stock_production.sql · Version 1.0 · 27-Nov-2026
+-- File: 04_stock_production.sql · Version 1.0.1 · 27-Nov-2026
 --
 -- What this file sets up:
 --   The Production window's two batch types: Preparation (raw material
@@ -206,7 +206,8 @@ end $$;
 alter table stock_moves drop constraint if exists stock_moves_kind_check;
 alter table stock_moves add constraint stock_moves_kind_check check (kind in
   ('grn', 'bill_adjust', 'debit_note', 'purchase_return', 'reversal', 'preparation', 'production', 'wastage',
-   'write_down', 'count', 'sale', 'sales_return', 'opening'));
+   'write_down', 'count', 'sale', 'sales_return', 'opening',
+   'overhead'));  -- 'overhead' comes from module 6; listed here so a re-run of this file keeps working
 create index if not exists stock_moves_key_idx on stock_moves (item_id, pack_id, move_date);
 create index if not exists stock_moves_lot_idx on stock_moves (lot_batch_id) where lot_batch_id is not null;
 create index if not exists stock_moves_batch_idx on stock_moves (batch_id) where batch_id is not null;

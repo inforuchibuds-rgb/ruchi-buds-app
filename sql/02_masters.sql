@@ -1,6 +1,7 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 2: Masters, chart of accounts and ledger
--- File: 02_masters.sql · Version 1.0 · 26-Nov-2026
+-- File: 02_masters.sql · Version 1.1 · 27-Nov-2026
+-- 1.1: Copy a journal into a new draft (Clone) and Reverse and correct.
 --
 -- What this file sets up:
 --   Units, items (raw, prepared / WIP, finished, by-products, packaging),
@@ -321,6 +322,8 @@ create table if not exists journals (
 );
 create index if not exists journals_date_idx on journals (journal_date);
 create index if not exists journals_status_idx on journals (status);
+-- 1.1: the journal a draft was copied from (Clone, Reverse and correct).
+alter table journals add column if not exists copied_from bigint references journals(id) on delete set null;
 
 create table if not exists journal_lines (
   id                  bigserial primary key,
@@ -1826,6 +1829,11 @@ begin
     where id = v_id;
   end if;
   perform rb_write_lines(v_id, p->'lines', rb_int(p, 'department_id')::int);
+  -- A copy remembers the journal it came from (only when it is first saved).
+  if rb_int(p, 'id') is null and rb_int(p, 'copied_from') is not null then
+    if not exists (select 1 from journals where id = rb_int(p, 'copied_from')) then raise exception 'The journal being copied was not found.'; end if;
+    update journals set copied_from = rb_int(p, 'copied_from') where id = v_id;
+  end if;
   -- Check each line now, so mistakes show while the person is still on the screen.
   declare v_l journal_lines; v_src text;
   begin
@@ -1907,6 +1915,36 @@ begin
   perform rb_audit_write('REVERSE_JOURNAL', 'journals', p_id::text, null,
     jsonb_build_object('journal_no', v_j.journal_no, 'reversal_id', v_new, 'date', p_date), trim(p_reason));
   return v_new;
+end $$;
+
+-- Reverse and correct: reverse a posted manual journal and, in the same step,
+-- save a draft copy of it on the same date, ready to change. The draft goes
+-- through the usual approval (a second person posts it). If anything fails,
+-- nothing is reversed.
+create or replace function rb_reverse_and_copy_journal(p_id bigint, p_date date, p_reason text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_me uuid := rb_require('accounts.add', 'enter journals'); v_j journals; v_rev bigint; v_new bigint;
+begin
+  select * into v_j from journals where id = p_id;
+  if v_j.id is null then raise exception 'Journal not found.'; end if;
+  if v_j.source = 'reversal' then raise exception 'This journal is itself a reversal.'; end if;
+  if v_j.source not in ('manual', 'opening') then
+    raise exception 'This journal comes from another screen. Reverse it there, then enter the correct one there.';
+  end if;
+  v_rev := rb_reverse_journal(p_id, p_date, p_reason);
+  insert into journals (journal_date, source, narration, status, entered_by, copied_from, is_demo, is_training, entity_code, currency)
+  values (p_date, v_j.source, v_j.narration, 'draft', v_me, p_id, v_j.is_demo, v_j.is_training or rb_is_training(),
+          v_j.entity_code, v_j.currency)
+  returning id into v_new;
+  insert into journal_lines (journal_id, line_no, journal_date, account_code, department_id, debit_paise, credit_paise,
+                             narration, customer_id, supplier_id, item_id, partner_id, counterparty_entity, currency, is_demo, is_training)
+  select v_new, line_no, p_date, account_code, department_id, debit_paise, credit_paise, narration, customer_id,
+         supplier_id, item_id, partner_id, counterparty_entity, currency, is_demo, v_j.is_training or rb_is_training()
+  from journal_lines where journal_id = p_id;
+  update journals set total_paise = v_j.total_paise where id = v_new;
+  perform rb_audit_write('REVERSE_AND_COPY', 'journals', p_id::text, null,
+    jsonb_build_object('journal_no', v_j.journal_no, 'reversal_id', v_rev, 'draft_id', v_new, 'date', p_date), trim(p_reason));
+  return jsonb_build_object('reversal_id', v_rev, 'reversal_no', (select journal_no from journals where id = v_rev), 'draft_id', v_new);
 end $$;
 
 -- Learning phase: a Director or the FC may fully delete a posted journal entered by
@@ -2025,6 +2063,12 @@ begin
     'approved_name', (select coalesce(short_name, full_name) from app_users where id = j.approved_by),
     'can_post', j.status = 'draft' and rb_has('accounts.approve') and rb_can_post_journal(j.id),
     'can_reverse', j.status = 'posted' and j.reversal_of is null and rb_has('power.reverse_entries'),
+    'can_correct', j.status = 'posted' and j.reversal_of is null and j.source in ('manual', 'opening')
+                   and rb_has('power.reverse_entries') and rb_has('accounts.add'),
+    'can_copy', j.source <> 'reversal' and rb_has('accounts.add'),
+    'copied_from_no', (select c.journal_no from journals c where c.id = j.copied_from),
+    'copies', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'journal_no', c.journal_no, 'status', c.status) order by c.id)
+                        from journals c where c.copied_from = j.id), '[]'::jsonb),
     'can_hard_delete', j.status <> 'draft' and j.reversal_of is null and j.reversed_by is null
                        and rb_can_hard_delete('accounts', j.entered_by),
     'period_locked', rb_period_locked(j.journal_date),
@@ -2122,7 +2166,7 @@ grant execute on function
   rb_save_account(jsonb), rb_add_local_account(jsonb), rb_import_accounts(jsonb),
   rb_set_posting_rule(text, text, text), rb_save_ledger_settings(jsonb), rb_lock_period(date, boolean, text),
   rb_save_journal(jsonb), rb_can_post_journal(bigint), rb_post_journal(bigint), rb_delete_draft_journal(bigint),
-  rb_reverse_journal(bigint, date, text), rb_hard_delete_journal(bigint),
+  rb_reverse_journal(bigint, date, text), rb_reverse_and_copy_journal(bigint, date, text), rb_hard_delete_journal(bigint),
   rb_trial_balance(date, date, int, boolean),
   rb_account_ledger(text, date, date, int, int, int, int), rb_journal_detail(bigint)
   to authenticated;

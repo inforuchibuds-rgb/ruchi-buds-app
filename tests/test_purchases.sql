@@ -330,6 +330,12 @@ select t_ok((select count(*) from audit_log where action in ('SAVE_ORDER', 'RECE
             'Purchase steps are in the audit log');
 
 -- 14. Remove demo data, then go live
+-- Reverse and correct (module 2, version 1.1) is only for manual journals
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
+select t_err(format($$select rb_reverse_and_copy_journal(%s, '2026-11-27', 'wrong')$$,
+  (select id from journals where source = 'purchases' and status = 'posted' order by id limit 1)), 'Reverse it there');
+select t_ok((rb_journal_detail((select id from journals where source = 'purchases' and status = 'posted' order by id limit 1))->>'can_correct')::boolean is false,
+            'The journal screen does not offer Reverse and correct for a purchase journal');
 select rb_remove_demo_data('REMOVE DEMO');
 select t_ok(not exists (select 1 from purchases where is_demo) and not exists (select 1 from stock_moves where is_demo)
         and not exists (select 1 from supplier_payments where is_demo), 'DEMO purchases, stock moves and payments removed');
