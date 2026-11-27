@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · users.js · Version 1.1 · 26-Nov-2026
+// RUCHI BUDS APP · users.js · Version 1.2 · 27-Nov-2026 (1.2: send the sign-in steps by WhatsApp or email)
 // Users, categories with the screen x action tick grid, per-user ticks,
 // password resets and unlocks, and the audit log screen.
 // =====================================================================
@@ -7,6 +7,14 @@
   'use strict';
   const RB = window.RB, $ = RB.$, $$ = RB.$$, esc = RB.esc;
   const ACTIONS = [['view', 'View'], ['add', 'Add'], ['edit', 'Edit'], ['approve', 'Approve'], ['delete', 'Delete'], ['margin', 'See margin']];
+  // The sign-in steps for a new user, ready for WhatsApp or email.
+  const signInSteps = (name, email, phone) => ({
+    phone, email, subject: 'Your Ruchi Buds app login',
+    text: 'Hello ' + (String(name || '').split(' ')[0] || '') + ', you have been added to the Ruchi Buds app.\n\n' +
+      '1. Open ' + RB.appUrl() + '\n2. Tap "First time here? Set up your password".\n' +
+      '3. Use this email: ' + email + '\n4. Choose your own password (at least 8 characters). Do not share it with anyone.\n\n' +
+      'After that, sign in with the same email and password.',
+  });
   const STATUS = { active: 'Active', invited: 'Invited', locked: 'Locked', inactive: 'Switched off' };
 
   async function loadCatalogue() {
@@ -92,10 +100,12 @@
           p_learning_phase_end: lp ? ($('#au-lp', m.el).value || null) : null,
         });
         const email = $('#au-email', m.el).value.trim();
-        m.el.querySelector('.modal').innerHTML = '<h2>User added</h2><div class="msg ok">Now tell them:</div>' +
-          '<ol><li>Open the Ruchi Buds app link.</li><li>Tap <b>First time here? Set up your password</b>.</li>' +
+        const name = $('#au-name', m.el).value.trim(), phone = $('#au-phone', m.el).value.trim();
+        m.el.querySelector('.modal').innerHTML = '<h2>User added</h2><div class="msg ok">The app does not send them an email. Now tell them:</div>' +
+          '<ol><li>Open the Ruchi Buds app link: <b>' + esc(RB.appUrl()) + '</b></li><li>Tap <b>First time here? Set up your password</b>.</li>' +
           '<li>Use the email <b>' + esc(email) + '</b> and choose their own password.</li></ol>' +
-          '<p class="muted">Nobody else ever needs to know their password.</p><div class="actions"><button class="primary" id="au-ok">Done</button></div>';
+          '<p class="muted">Send these steps with one of the buttons below. Nobody else ever needs to know their password.</p>' +
+          '<div class="actions">' + RB.shareButtons(signInSteps(name, email, phone)) + '<button class="primary" id="au-ok">Done</button></div>';
         $('#au-ok', m.el).addEventListener('click', () => { m.close(); done(); });
       } catch (err) { $('#au-msg', m.el).innerHTML = '<div class="msg error">' + esc(err.message) + '</div>'; }
     });
@@ -115,7 +125,8 @@
     const m = RB.modal('<h2>' + esc(u.full_name) + RB.demoBadge(u) + ' ' + RB.badge(u.status, STATUS[u.status]) + '</h2>' +
       '<div id="um-msg"></div>' +
       (u.status === 'locked' ? '<div class="msg error">Locked since ' + RB.fmtDateTime(u.locked_at) + ': ' + esc(u.locked_reason || '') + '</div>' : '') +
-      (u.status === 'invited' ? '<div class="msg info">Has not set up a password yet.' + (u.is_demo ? ' DEMO users are examples and cannot sign in.' : '') + '</div>' : '') +
+      (u.status === 'invited' ? '<div class="msg info">Has not set up a password yet.' + (u.is_demo ? ' DEMO users are examples and cannot sign in.' :
+        ' Send them the sign-in steps again:<div class="actions" style="margin:.5rem 0 0">' + RB.shareButtons(signInSteps(u.full_name, u.email, u.phone)) + '</div>') + '</div>' : '') +
       '<div class="field"><label>Email</label><input value="' + esc(u.email) + '" disabled></div>' +
       '<div class="row"><div class="field"><label>Full name</label><input id="um-name" value="' + esc(u.full_name) + '"' + (canEdit ? '' : ' disabled') + '></div>' +
       '<div class="field"><label>Short name</label><input id="um-short" value="' + esc(u.short_name || '') + '"' + (canEdit ? '' : ' disabled') + '></div></div>' +

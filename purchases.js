@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · purchases.js · Version 1.2 · 27-Nov-2026
+// RUCHI BUDS APP · purchases.js · Version 1.3 · 27-Nov-2026 (1.3: send orders and payment advice by WhatsApp or email)
 // Module 3 screen "Purchases": the Purchase window (order, receive, bill,
 // matched side by side), direct purchases with no PO, every difference
 // with Accept or Reject, returns, supplier payments, supplier balances and
@@ -207,12 +207,19 @@
       (pay.reference ? ' · ref ' + esc(pay.reference) : '') + '</p>' +
       (pay.status !== 'posted' ? '<div class="msg info">Reversed: ' + esc(pay.reverse_reason || '') + '</div>' : '') +
       (pay.on_account > 0 ? '<p>' + RB.rupees(pay.on_account) + ' is on account (not set against a bill yet).</p>' : '') +
+      (pay.status === 'posted' ? '<div class="actions" id="pm-share"></div>' : '') +
       '<div class="actions">' +
       (pay.status === 'posted' && pay.on_account > 0 && RB.has('purchases.add') ? '<button class="primary" id="pm-alloc">Set against bills</button>' : '') +
       (pay.status === 'posted' && RB.has('power.reverse_entries') ? '<button class="danger" id="pm-rev">Reverse payment</button>' : '') +
       (pay.status === 'posted' && RB.has('purchases.delete') ? '<button class="danger" id="pm-del">Delete fully (learning phase)</button>' : '') +
       '<button data-close>Close</button></div>');
     const on = (id, fn) => { const b = $(id, m.el); if (b) b.addEventListener('click', fn); };
+    if (pay.status === 'posted') RB.contactOf('suppliers', pay.supplier_id).then((c) => {
+      const box = $('#pm-share', m.el); if (!box) return;
+      box.innerHTML = RB.shareButtons({ phone: c.phone, email: c.email, subject: 'Payment ' + pay.payment_no + ' from Ruchi Buds',
+        text: 'Hello ' + pay.supplier + ', Ruchi Buds has paid you ' + RB.rupees(pay.amount_paise) + ' on ' + RB.fmtDate(pay.pay_date) + ' by ' + (MODES[pay.mode] || pay.mode) +
+          (pay.reference ? ' (ref ' + pay.reference + ')' : '') + '. Our payment no. ' + pay.payment_no + '. Please confirm when received. Thank you.' });
+    });
     on('#pm-alloc', () => { m.close(); payModal({ supplier_id: pay.supplier_id, allocateOnly: pay }, done); });
     on('#pm-rev', () => { m.close(); reverseModal('Reverse payment ' + pay.payment_no, 'The payment is undone in the books and the bills it paid are owed again.',
       (dt, why) => RB.rpc('rb_reverse_supplier_payment', { p_id: pay.id, p_date: dt, p_reason: why }), done); });
@@ -460,6 +467,16 @@
       btn(can.cancel, 'pw-cancel', 'Cancel order', 'danger') +
       btn(can.reverse, 'pw-reverse', 'Reverse purchase', 'danger') +
       btn(can.hard_delete, 'pw-delete', 'Delete fully (learning phase)', 'danger') + '</div>' +
+      (p.po_no && !p.is_direct && !['cancelled', 'refused'].includes(p.status) ? (() => {
+        const sp = d.sup[p.supplier_id] || {};
+        const text = 'Hello ' + p.supplier_name + ', please supply the following for Ruchi Buds.\nPurchase order ' + p.po_no + ' dated ' + RB.fmtDate(p.po_date) +
+          (p.expected_date ? ', needed by ' + RB.fmtDate(p.expected_date) : '') + ':\n' +
+          lines.map((l, i) => (i + 1) + '. ' + l.item_name + ': ' + q(l.po_qty) + ' ' + l.unit_code + ' at ' + RB.rupees(l.po_rate_paise) +
+            (Number(l.gst_rate) ? ' + GST ' + q(l.gst_rate) + '%' : '')).join('\n') +
+          '\nOrder value: ' + RB.rupees(p.order_total_paise) + '.\nPlease quote ' + p.po_no + ' on your bill. Thank you.';
+        return '<div class="actions" style="margin:-.5rem 0 1rem">' + RB.shareButtons({ phone: sp.phone, email: sp.email, subject: 'Purchase order ' + p.po_no + ' from Ruchi Buds', text,
+          label: 'Send order on WhatsApp', mailLabel: 'Send order by email' }) + '</div>';
+      })() : '') +
       (p.open_discrepancies > 0 && p.outstanding_paise > 0 ? '<div class="msg error">This purchase has ' + p.open_discrepancies + ' open difference(s). It cannot be paid until each one is accepted or rejected.</div>' : '');
 
     body.innerHTML = bar + head + match + diffs + docsHtml + photos;
