@@ -77,6 +77,8 @@
       '<div class="field"><label for="st-dplimit">Direct purchases above this need approval (₹)</label><input id="st-dplimit" type="number" min="0" step="1" value="' +
       (s.direct_purchase_approval_limit_paise == null ? '' : s.direct_purchase_approval_limit_paise / 100) + '"' + dis + '><div class="hint">Only the Accountant, FC or a Director can approve them. Blank means no approval is needed.</div></div>' +
       '<div class="field"><label for="st-flimit">Lock an account after this many wrong passwords</label><input id="st-flimit" type="number" min="3" max="20" value="' + s.failed_login_limit + '"' + dis + '></div>' +
+      (!('idle_signout_minutes' in s) ? '' : '<div class="field"><label for="st-idle">Sign out automatically after this many minutes without use</label><input id="st-idle" type="number" min="0" max="480" value="' +
+        s.idle_signout_minutes + '"' + dis + '><div class="hint">0 means never. The screen also hides itself after 3 minutes without use.</div></div>') +
       '</div></section>' +
       // ---- sales and invoices (once 05_sales_invoices.sql has run)
       (!('sale_prices_include_gst' in s) ? '' : '<section class="card"><h2>Sales and invoices</h2>' +
@@ -181,6 +183,7 @@
             trader_required_fields: $$('[data-trader]', body).filter((c) => c.checked).map((c) => c.dataset.trader),
             direct_purchase_approval_limit_paise: limit === '' ? null : Math.round(Number(limit) * 100),
             failed_login_limit: Number(v('flimit')), wordmark_url: wordmark || '',
+            ...($('#st-idle', body) ? { idle_signout_minutes: Number(v('idle')) } : {}),
           } });
           if (v('gstin').trim() || s.gst_registered_from) await RB.rpc('rb_set_gst_registration', { p_gstin: v('gstin'), p_from: v('gstfrom') || null });
           if ($('#st-incl', body)) await RB.rpc('rb_save_sales_settings', { p: { sale_prices_include_gst: $('#st-incl', body).checked, invoice_footer: v('footer'),
@@ -197,6 +200,7 @@
                     RB.cache.settings = Object.assign(RB.cache.settings || {}, { wordmark_url: wordmark || null, firm_name: v('firm_name') });
           const img = $('.banner .wordmark'); if (img) img.src = wordmark || 'assets/wordmark.png';
           $('#st-saved', body).textContent = 'Saved ' + RB.fmtDateTime(new Date());
+          if ($('#st-idle', body)) { RB.cache.idleMinutes = Number(v('idle')); RB.idleSignout(); }
           RB.toast('Settings saved');
         } catch (e) { RB.toast(e.message, true); }
       });
