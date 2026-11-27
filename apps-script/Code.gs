@@ -1,6 +1,6 @@
 /**
  * =====================================================================
- * RUCHI BUDS APP · Code.gs · Version 1.1 · 27-Nov-2026
+ * RUCHI BUDS APP · Code.gs · Version 1.2 · 27-Nov-2026
  * One Google Apps Script for:
  *   - nightlyBackup(): copies every table to a dated folder in Google
  *     Drive ("Ruchi Buds Backups/2026-11-26") and keeps the last 30 days.
@@ -9,7 +9,13 @@
  *   - weeklySheetsCopy(): every Monday, copies the reporting data
  *     (accounts, monthly balances, sales, purchases, expenses, loans) to
  *     the Google Sheet "Ruchi Buds Reporting" that feeds Looker Studio.
- * Module 9 later adds the restore.
+ *   - stageLatestBackup(): loads a nightly backup from Drive into the
+ *     app, where a Director or the FC checks and restores it
+ *     (Settings -> Restore a backup). applyRestore() finishes a restore
+ *     already confirmed in the app, if it was too big for the app.
+ *   - restoreDrill(): reloads last night's backup into a separate TEST
+ *     copy of the database and checks every table, without touching the
+ *     live data.
  *
  * Set-up (once): Project Settings -> Script Properties, add
  *   SUPABASE_URL          your Project URL
@@ -18,6 +24,11 @@
  *   ALERT_EMAIL           optional: who gets an email if a backup fails
  *   REPORT_SHEET_ID       optional: the reporting sheet to fill. Left out,
  *                         the first copy makes one and remembers it.
+ *   RESTORE_DAY           optional: the Drive backup to load, as 2026-11-26.
+ *                         Left out, stageLatestBackup loads the newest.
+ *   TEST_SUPABASE_URL, TEST_SUPABASE_SERVICE_KEY
+ *                         for the restore drill only: the TEST project's
+ *                         URL and secret key (never the live ones).
  * Then run setupTriggers() once and allow the permissions it asks for.
  * =====================================================================
  */
@@ -26,17 +37,19 @@ var BACKUP_FOLDER_NAME = 'Ruchi Buds Backups';
 var KEEP_DAYS = 30;
 var PAGE = 1000;
 
-function config_() {
+function config_(test) {
   var p = PropertiesService.getScriptProperties();
-  var url = (p.getProperty('SUPABASE_URL') || '').replace(/\/+$/, '');
-  var key = p.getProperty('SUPABASE_SERVICE_KEY') || '';
-  if (!url || !key) throw new Error('Add SUPABASE_URL and SUPABASE_SERVICE_KEY in Project Settings -> Script Properties.');
+  var pre = test ? 'TEST_' : '';
+  var url = (p.getProperty(pre + 'SUPABASE_URL') || '').replace(/\/+$/, '');
+  var key = p.getProperty(pre + 'SUPABASE_SERVICE_KEY') || '';
+  if (!url || !key) throw new Error('Add ' + pre + 'SUPABASE_URL and ' + pre + 'SUPABASE_SERVICE_KEY in Project Settings -> Script Properties.');
+  if (test && url === (p.getProperty('SUPABASE_URL') || '').replace(/\/+$/, '')) throw new Error('TEST_SUPABASE_URL must be the test project, not the live one.');
   return { url: url, key: key, alert: p.getProperty('ALERT_EMAIL') || Session.getEffectiveUser().getEmail() };
 }
 
-/** Calls a database function (rb_...) and returns its result. */
-function rpc_(name, args) {
-  var c = config_();
+/** Calls a database function (rb_...) and returns its result. test = the test project. */
+function rpc_(name, args, test) {
+  var c = config_(test);
   var res = UrlFetchApp.fetch(c.url + '/rest/v1/rpc/' + name, {
     method: 'post',
     contentType: 'application/json',
@@ -171,6 +184,97 @@ function writeTab_(ss, name, rows) {
   }
   sh.setFrozenRows(1);
   sh.getRange(1, 1, 1, head.length).setFontWeight('bold');
+}
+
+/**
+ * Loads a nightly backup from Drive into the app for restore: the newest,
+ * or the day in the RESTORE_DAY property (e.g. 2026-11-26). Nothing in the
+ * books changes: a Director or the FC then checks it and restores it in
+ * the app (Settings -> Restore a backup).
+ */
+function stageLatestBackup() {
+  var r = stage_(false, 'drive');
+  Logger.log('Loaded the backup of ' + r.day + ' (' + r.rows + ' rows). ' +
+             (r.errors.length ? 'It does NOT check out: ' + r.errors[0] : 'Now open the app: Settings -> Restore a backup.'));
+}
+
+/** Finishes a restore confirmed in the app within the last hour (if the app timed out). */
+function applyRestore() {
+  var jobs = rpc_('rb_restore_list', {}).filter(function (j) { return j.status === 'ready'; });
+  var done = false;
+  for (var i = 0; i < jobs.length && !done; i++) {
+    try {
+      var r = rpc_('rb_restore_apply', { p_job: jobs[i].id });
+      Logger.log('Restored "' + jobs[i].label + '": ' + r.tables + ' tables, ' + r.rows + ' rows.');
+      done = true;
+    } catch (e) {
+      if (!/must confirm/.test(e.message)) throw e;
+    }
+  }
+  if (!done) Logger.log('No restore is waiting. First confirm it in the app (Settings -> Restore a backup), then run this within the hour.');
+}
+
+/**
+ * The restore drill: reloads the newest nightly backup into the TEST
+ * project (TEST_SUPABASE_URL / TEST_SUPABASE_SERVICE_KEY), restores it
+ * there and checks every table's row count against the backup. The live
+ * data is not touched; the result is recorded in the live backup log.
+ */
+function restoreDrill() {
+  var day = '', rows = 0, tables = 0;
+  try {
+    var r = stage_(true, 'drill');
+    day = r.day;
+    if (r.errors.length) throw new Error('The backup does not check out: ' + r.errors[0]);
+    rpc_('rb_restore_approve', { p_job: r.job, p_confirm: 'RESTORE', p_reason: 'Restore drill of the backup of ' + day }, true);
+    var res = rpc_('rb_restore_apply', { p_job: r.job }, true);
+    var counts = rpc_('rb_restore_counts', {}, true), bad = [];
+    var skip = ['audit_log', 'backup_log', 'screens', 'powers', 'permissions', 'fs_lines'];
+    Object.keys(r.manifest).forEach(function (t) {
+      if (skip.indexOf(t) >= 0 || !(t in counts)) return;
+      tables++; rows += r.manifest[t];
+      if (Number(counts[t]) !== Number(r.manifest[t])) bad.push(t + ' (backup ' + r.manifest[t] + ', restored ' + counts[t] + ')');
+    });
+    if (bad.length) throw new Error('Row counts differ: ' + bad.join(', '));
+    rpc_('rb_log_backup', { p_kind: 'drill', p_status: 'ok', p_tables: tables, p_rows: rows,
+                            p_detail: 'Backup of ' + day + ' restored into the test copy; every table checked (' + res.rows + ' rows)' });
+    Logger.log('Restore drill PASSED: the backup of ' + day + ' restored into the test copy, ' + tables + ' tables checked.');
+  } catch (e) {
+    try { rpc_('rb_log_backup', { p_kind: 'drill', p_status: 'failed', p_tables: tables, p_rows: rows, p_detail: (day ? day + ': ' : '') + e.message }); } catch (x) {}
+    notify_('Ruchi Buds: restore drill FAILED', 'The restore drill failed:\n\n' + e.message);
+    throw e;
+  }
+}
+
+/** Loads a Drive backup into a restore job (live, or the test project). */
+function stage_(test, source) {
+  var root = getOrCreateFolder_(DriveApp.getRootFolder(), BACKUP_FOLDER_NAME);
+  var want = PropertiesService.getScriptProperties().getProperty('RESTORE_DAY');
+  var folder = null, day = '';
+  var it = root.getFolders();
+  while (it.hasNext()) {
+    var f = it.next(), n = f.getName();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(n)) continue;
+    if (want && !test ? n === want : n > day) { folder = f; day = n; if (want && !test) break; }
+  }
+  if (!folder) throw new Error(want && !test ? 'No backup folder named ' + want + ' in ' + BACKUP_FOLDER_NAME + '.' : 'No backup found in ' + BACKUP_FOLDER_NAME + '.');
+  var mf = folder.getFilesByName('_manifest.json');
+  if (!mf.hasNext()) throw new Error('The backup of ' + day + ' has no _manifest.json: it did not finish. Choose another day.');
+  var manifest = JSON.parse(mf.next().getBlob().getDataAsString());
+  var job = rpc_('rb_restore_start', { p: { source: source, label: 'Nightly backup ' + day, taken_at: manifest.taken_at, tables: manifest.tables } }, test);
+  var rows = 0;
+  Object.keys(manifest.tables).forEach(function (t) {
+    var files = folder.getFilesByName(t + '.json');
+    if (!files.hasNext()) throw new Error('The backup of ' + day + ' is missing ' + t + '.json.');
+    var data = JSON.parse(files.next().getBlob().getDataAsString());
+    for (var i = 0, seq = 0; i < data.length || seq === 0; i += PAGE, seq++) {
+      rpc_('rb_restore_add', { p_job: job, p_table: t, p_seq: seq, p_rows: data.slice(i, i + PAGE) }, test);
+      if (!data.length) break;
+    }
+    rows += data.length;
+  });
+  var check = rpc_('rb_restore_finish', { p_job: job }, test);
+  return { job: job, day: day, rows: rows, manifest: manifest.tables, errors: check.errors };
 }
 
 /** Keeps the newest KEEP_DAYS daily folders and bins the rest. */
