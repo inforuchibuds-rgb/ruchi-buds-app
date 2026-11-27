@@ -1,5 +1,5 @@
 /* =====================================================================
-   RUCHI BUDS APP · ruchi.css · Version 1.1 · 26-Nov-2026
+   RUCHI BUDS APP · ruchi.css · Version 1.2 · 27-Nov-2026
    Brand colours and the spreadsheet-style look shared by every screen.
    ===================================================================== */
 :root {
@@ -189,8 +189,48 @@ table.ticks.lines td input, table.ticks.lines td select { min-height: 40px; }
   .menu { grid-template-columns: repeat(2, 1fr); }
   .modal-bg { padding: .5rem; }
 }
+/* ---------- sales, invoices and statements (module 5) ---------- */
+table.sum { margin-left: auto; border-collapse: collapse; min-width: 260px; }
+table.sum td { padding: .25rem .5rem; }
+table.sum td:last-child { text-align: right; white-space: nowrap; }
+table.sum tr.grand td { border-top: 2px solid var(--ruchi-red); font-weight: 700; font-size: 1.1rem; color: var(--ruchi-red-dark); }
+tr.click { cursor: pointer; }
+tr.click:hover { background: #FFF0CC !important; }
+.invoice { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 1.25rem; margin-bottom: 1rem; color: #222; }
+.invoice.cancelled { opacity: .6; }
+.inv-head { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-start; border-bottom: 3px solid var(--ruchi-red); padding-bottom: .75rem; margin-bottom: .75rem; }
+.inv-brand { background: var(--ruchi-red); border-radius: 6px; padding: .5rem .75rem; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.inv-brand img { height: 54px; display: block; }
+.inv-firm { flex: 1 1 220px; font-size: .9rem; }
+.inv-title { font-size: 1.3rem; font-weight: 800; color: var(--ruchi-red); letter-spacing: .04em; }
+.inv-meta { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-bottom: .75rem; font-size: .92rem; }
+table.kv td { padding: .1rem .5rem .1rem 0; }
+table.kv td:first-child { color: var(--muted); }
+table.inv-lines { width: 100%; min-width: 620px; border-collapse: collapse; font-size: .9rem; }
+table.ticks.lines thead th:first-child { background: var(--cream); }
+table.inv-lines th, table.inv-lines td { border-bottom: 1px solid var(--line); padding: .35rem .4rem; text-align: left; vertical-align: top; }
+table.inv-lines thead th { background: var(--cream); -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+table.inv-lines .n { text-align: right; white-space: nowrap; }
+table.inv-lines small { display: block; color: var(--muted); font-size: .75rem; }
+table.inv-lines tfoot td { font-weight: 700; border-top: 2px solid var(--line); }
+.inv-foot { display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between; margin-top: .75rem; }
+.inv-foot > div { flex: 1 1 260px; }
+.inv-sign { text-align: right; margin-top: 1rem; font-size: .9rem; }
+.inv-small { font-size: .78rem; }
+main.public { max-width: 900px; margin: 0 auto; padding: 1rem; }
+
 @media print {
-  .banner, .training-strip, .actions, .tabs { display: none !important; }
+  .banner, .training-strip, .actions, .tabs, .no-print, .page-head .back, #page-tools { display: none !important; }
+  body { background: #FFF; }
+  main { padding: 0 !important; }
+  .invoice { border: 0; padding: 0; }
+  table.inv-lines { min-width: 0; }
+  .grid-wrap { overflow: visible; border: 0; }
+  /* printing a statement from its window: print only that */
+  body.printing-modal #app { display: none !important; }
+  body.printing-modal .modal-bg { position: static; background: none; padding: 0; }
+  body.printing-modal .modal { max-width: none; padding: 0; }
+  body.printing-modal .modal > *:not(.print-area) { display: none !important; }
 }
 
 /* ---------- stock and production (module 4) ---------- */

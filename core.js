@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · core.js · Version 1.1 · 27-Nov-2026
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -148,6 +148,9 @@
     RB.sb = supabase.createClient(c.SUPABASE_URL, c.SUPABASE_ANON_KEY, {
       auth: { persistSession: true, autoRefreshToken: true },
     });
+    // A customer opening a statement link: show just that statement, no sign-in.
+    const pub = location.hash.match(/^#\/s\/([0-9a-f]{20,})$/);
+    if (pub && RB.invoices) return RB.invoices.publicStatement(pub[1]);
     window.addEventListener('hashchange', () => RB.route());
     const { data } = await RB.sb.auth.getSession();
     if (data.session) await RB.afterSignIn(false);

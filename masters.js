@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · masters.js · Version 1.1 · 26-Nov-2026
+// RUCHI BUDS APP · masters.js · Version 1.2 · 27-Nov-2026
 // Module 2 screens: Masters (items, packs and prices, departments,
 // units), Customers and Suppliers. The Add customer / Add supplier forms
 // are shared, so the Sales and Purchase screens can open them later.
@@ -370,7 +370,7 @@
     let promoOnly = false;
     body.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('customers.add') ? '<button class="primary" id="cu-add">+ Add customer</button>' : '') +
       '<button id="cu-promo">Promotions list</button><button id="cu-xls">Download to Excel</button></div>' +
-      '<p class="muted">Retail and trader customers. The customer ledger and statements come with module 5. Tap a customer to see or change them.</p><div id="cu-grid"></div>';
+      '<p class="muted">Retail and trader customers. Tap a customer to see or change them. Balances, ledgers and statements are on the Balances and statements tab.</p><div id="cu-grid"></div>';
     const rows = d.customers.map((c) => Object.assign({}, c, { kind_t: CUST_KINDS[c.kind], promo: c.send_promotions ? 'Yes' : '', credit: RB.rupees(c.credit_limit_paise) }));
     const grid = RB.grid($('#cu-grid', body), [
       { title: 'Code', field: 'code', width: 100 },
