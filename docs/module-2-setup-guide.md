@@ -1,8 +1,28 @@
 # Ruchi Buds app: Module 2 setup guide
 
-Version 1.1 · 26-Nov-2026 · Module 2: Masters, chart of accounts and ledger
+Version 1.2 · 27-Nov-2026 · Module 2: Masters, chart of accounts and ledger
 
-This update takes about 10 minutes. You paste one file into Supabase. GitHub Pages updates the screens on its own once the pull request is merged.
+## What's new in version 1.2: Clone, and Reverse and correct
+
+Open any journal in **Accounts → Journals**:
+
+- **Clone** makes a new draft with the same lines and description. Change what you need (date, amounts, accounts) and **Save draft**. It is posted (approved) like any other journal, so a second person still approves it. The draft shows **Copied from** with the original's number. Any journal can be cloned except a reversal. A copy of a journal from another screen (purchases, sales and so on) becomes a manual journal, so stock lines are refused when you save it.
+- **Reverse and correct…** is on posted manual and opening-balance journals. Give one date (in an open month, on or after the original) and what was wrong. In one step the original is reversed, and a draft copy is saved on that date and opens for you to fix. If you close it, the draft waits in the journal list. Nothing happens if any part fails. It needs both the **Reverse posted entries** special right and **Accounts → Add**. Journals from other screens are still reversed in their own screen (for example open the purchase), so stock and party balances stay right.
+
+Posted journals still cannot be edited, so the books always keep the original, its reversal and the correction.
+
+**To install version 1.2 (about 10 minutes):**
+
+1. Take a backup: **Settings → Backup now (file for restore)**.
+2. In Supabase **SQL Editor**, run these files again, one after the other, in this order: `sql/02_masters.sql`, `sql/03_purchases.sql`, `sql/04_stock_production.sql`, `sql/05_sales_invoices.sql`, `sql/06_cash_bank.sql`, `sql/07_loans_leases.sql`. Each should end with **Success. No rows returned**. Nothing is lost; the later files must follow because each one puts back its own rules after the earlier file.
+3. Reload the app once the pull request is merged.
+4. Tick section H of the [test checklist](module-2-test-checklist.md).
+
+`sql/04_stock_production.sql` also has a one-line fix in this update, so that running it again after module 6 no longer stops with a "stock_moves_kind_check" error.
+
+## First-time setup
+
+The first-time setup takes about 10 minutes. You paste one file into Supabase. GitHub Pages updates the screens on its own once the pull request is merged.
 
 ## What module 2 gives you
 
@@ -14,7 +34,7 @@ This update takes about 10 minutes. You paste one file into Supabase. GitHub Pag
 - **Customers**: retail, trader and online, with a Promotions list that shows only people who agreed to messages. Walk-in customer C00000 is ready for counter sales.
 - **Suppliers**: with GSTIN, PAN, bank details and credit days.
 - **Accounts**:
-  - **Journals**: hand-keyed journals that are saved as a draft, posted, and reversed. A journal can never be edited after it is posted.
+  - **Journals**: hand-keyed journals that are saved as a draft, posted, and reversed. A journal can never be edited after it is posted: use **Reverse and correct** or **Clone** (version 1.2).
   - **Trial balance**: for any date range, filtered by department.
   - **Account ledger**: for any account, filtered by customer, supplier, partner or department.
   - **Chart of accounts**: the Master COA (8-digit IFRS codes), with your own local accounts and an Excel import for updates.
@@ -79,7 +99,7 @@ In **Categories and access**, the new screens are already ticked for the startin
 |---|---|---|
 | `sql/02_masters.sql` | The database for module 2 | Paste into Supabase SQL Editor (step 2) |
 | `masters.js` | Masters, Customers and Suppliers screens | Already in the repository, served by GitHub Pages |
-| `accounts.js` | Accounts screen (journals, trial balance, ledger, COA, posting rules, month lock) | The same |
+| `accounts.js`, `users.js` (audit label) | Accounts screen (journals with Clone and Reverse and correct, trial balance, ledger, COA, posting rules, month lock) | The same |
 | `index.html`, `settings.js`, `users.js` | Updated to version 1.1 | The same |
 | `docs/module-2-test-checklist.md` | What to tick before sign-off | Read and tick |
 | `tests/test_masters.sql`, `tests/e2e_masters.js` | The automatic checks used while building | Not needed in Supabase |
@@ -88,5 +108,6 @@ In **Categories and access**, the new screens are already ticked for the startin
 
 - **"permission denied for function …"** on any screen: `02_masters.sql` needs running again (usually because `01_core_users.sql` was run after it).
 - **"Some DEMO records are still used by real records"** when removing demo data: a real record (for example a real product pack) uses a DEMO item or pack type. Change that real record to use a real one, then try again.
+- **"This journal comes from another screen. Reverse it there…"** on Reverse and correct: open the purchase, invoice, payment or loan entry in its own screen and reverse it there, then enter the right one there.
 - **"This month is locked"**: unlock it in Accounts → Month lock (a Director or FC, with a reason), post, then lock it again.
 - Anything else: take a screenshot and send it in the project thread.

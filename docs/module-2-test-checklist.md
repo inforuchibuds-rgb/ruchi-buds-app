@@ -1,6 +1,6 @@
 # Ruchi Buds app: Module 2 test checklist
 
-Version 1.1 · 26-Nov-2026
+Version 1.2 · 27-Nov-2026
 
 Tick each line on the real app before signing off module 2. You need DS's login and a second login with Accountant or FC rights (the test user from module 1 can be moved to Accountant for this).
 
@@ -63,6 +63,22 @@ Tick each line on the real app before signing off module 2. You need DS's login 
 
 - [ ] **Settings → Remove demo data**, type REMOVE DEMO. DEMO items, customers, suppliers and journals disappear. Your real entries stay.
 - [ ] If it says some DEMO records are still used, change your real record to use a real item or pack type, and try again.
+
+## H. Clone, and Reverse and correct (version 1.2)
+
+Use two logins with approval rights (for example DS and the FC or Accountant). Do this before G if you still have demo data, or with a test journal.
+
+- [ ] Post a test journal: Debit 80020110 Utilities ₹500, Credit 10010110 Cash on Hand ₹500, "Test: gas bill".
+- [ ] Open it and press **Reverse and correct…**. Leave the reason empty and press the button: it asks for the reason, and nothing changes.
+- [ ] Give a date in an open month and the reason "Bill was ₹450". The original now shows **Reversed**, a reversal journal is posted, and a **Correct the copy** form opens with the same lines.
+- [ ] Change both amounts to ₹450 and **Save draft**. The draft shows **Copied from** with the original's number. The original shows it under **Copies**.
+- [ ] The person who saved the copy cannot post it (unless the second-person switch is off). Sign in as the other person and **Post** it.
+- [ ] **Trial balance**: Utilities shows ₹450 for this test, not ₹500 or ₹950.
+- [ ] Open the original again: there is no **Reverse and correct** button now, but **Clone** is there.
+- [ ] Press **Clone**. A **Copy of …** form opens with today's date and the same lines. Change the description to "Test: gas bill, next month" and **Save draft**. It shows **Copied from**. Delete this draft (or post it and reverse it).
+- [ ] Open a journal made by another screen (for example a purchase, if module 3 has demo data). It has **Clone** but no **Reverse and correct**.
+- [ ] A Staff login (no journal rights) sees neither button.
+- [ ] **Audit log** shows "Reversed and copied journal (to correct)" with the reason.
 
 ## Sign-off
 

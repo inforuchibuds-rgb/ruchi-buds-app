@@ -123,6 +123,23 @@ const BASE = 'http://localhost:8787/';
   await page.getByText('Electricity bill for November').first().click(); await opened();
   await page.click('#jm-rev'); await opened(); await page.fill('#rv-why', 'Bill belongs to December'); await page.click('#rv-go'); await see('Reversed');
   await see('Reversal of TRN/'); step('reversed the electricity bill');
+  // Reverse and correct: the receivable was ₹2,400, not ₹2,500
+  await page.getByText('Opening balance owed by Mumbai').first().click(); await opened();
+  await page.click('#jm-correct'); await opened(); await page.fill('#rc-why', 'Amount was ₹2,400'); await shot('m11a-reverse-and-correct');
+  await page.click('#rc-go'); await see('Now correct the copy'); await see('Correct the copy of TRN/');
+  if ((await page.locator('[data-party=customer_id]').inputValue()) === '') throw new Error('Copy lost the customer');
+  await page.locator('[data-f=debit]').nth(0).fill('2400'); await page.locator('[data-f=credit]').nth(1).fill('2400'); await see('Balanced');
+  await shot('m11b-correct-the-copy');
+  await page.click('#je-save'); await see('Draft saved'); await see('Copied from TRN/');
+  await page.click('#jm-post'); await see('Posted as TRN/'); step('Reverse and correct: reversed, then the corrected copy saved and posted');
+  // Clone the (reversed) electricity bill into a new draft
+  await page.getByText('Electricity bill for November').first().click(); await opened();
+  await see('Copies:').catch(() => {});
+  await page.click('#jm-copy'); await see('Copy of TRN/');
+  if ((await page.locator('#je-narr').inputValue()) !== 'Electricity bill for November, paid in cash') throw new Error('Clone did not copy the narration');
+  await page.fill('#je-narr', 'Electricity bill for December, paid in cash'); await shot('m11c-clone');
+  await page.click('#je-save'); await see('Draft saved'); await see('Copied from TRN/'); await shot('m11d-clone-draft');
+  await page.click('#jm-post'); await see('Posted as TRN/'); step('Clone: a copy of a journal saved as a new draft and posted');
   await page.click('button[data-tab=months]'); await see('Ledger settings');
   await page.check('#ls-second'); await page.click('#ls-save'); await see('Ledger settings saved');
 

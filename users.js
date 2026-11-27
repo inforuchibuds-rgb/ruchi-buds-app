@@ -366,7 +366,7 @@
   const ACTION_NAMES = {
     INSERT: 'Added', UPDATE: 'Changed', DELETE: 'Deleted', LOGIN: 'Signed in', LOGIN_FAILED: 'Wrong password',
     PASSWORD_RESET: 'Password reset', PASSWORD_CHANGED: 'Changed own password', REMOVE_DEMO: 'Removed demo data',
-    POST_JOURNAL: 'Posted journal', REVERSE_JOURNAL: 'Reversed journal', DELETE_DRAFT: 'Deleted draft journal', IMPORT_COA: 'Imported chart of accounts',
+    POST_JOURNAL: 'Posted journal', REVERSE_JOURNAL: 'Reversed journal', REVERSE_AND_COPY: 'Reversed and copied journal (to correct)', DELETE_DRAFT: 'Deleted draft journal', IMPORT_COA: 'Imported chart of accounts',
   };
 
   function summarise(r) {

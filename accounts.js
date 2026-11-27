@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · accounts.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · accounts.js · Version 1.1 · 27-Nov-2026 (Clone, Reverse and correct)
 // Module 2 screen "Accounts and journals": manual journals with approval,
 // reversal and learning-phase delete, trial balance, account ledger,
 // chart of accounts (with import from the Master COA workbook), posting
@@ -104,7 +104,9 @@
       '<p><b>' + RB.fmtDate(j.journal_date) + '</b> · ' + esc(j.narration) + '</p>' +
       '<p class="muted">' + esc(SOURCES[j.source] || j.source) + ' · entered by ' + esc(j.entered_name || 'system') + ' ' + RB.fmtDateTime(j.entered_at) +
       (j.approved_name ? ' · posted by ' + esc(j.approved_name) + ' ' + RB.fmtDateTime(j.posted_at) : '') +
-      (j.reverse_reason && j.status === 'reversed' ? '<br>Reversed: ' + esc(j.reverse_reason) : '') + (j.period_locked ? '<br>' + RB.badge('locked', 'Month locked') : '') + '</p>' +
+      (j.reverse_reason && j.status === 'reversed' ? '<br>Reversed: ' + esc(j.reverse_reason) : '') + (j.period_locked ? '<br>' + RB.badge('locked', 'Month locked') : '') +
+      (j.copied_from ? '<br>Copied from ' + esc(j.copied_from_no || 'a draft') : '') +
+      (j.copies && j.copies.length ? '<br>Copies: ' + j.copies.map((c) => esc(c.journal_no || 'draft') + ' (' + esc(STATUS[c.status]) + ')').join(', ') : '') + '</p>' +
       '<div class="grid-wrap"><table class="ticks"><thead><tr><th>Account</th><th>Department</th><th>For</th><th>Debit</th><th>Credit</th></tr></thead><tbody>' +
       j.lines.map((l) => '<tr><td style="text-align:left">' + esc(l.account_code + ' ' + l.account_name) + (l.narration ? '<br><span class="muted">' + esc(l.narration) + '</span>' : '') +
         '</td><td>' + esc(l.department || '') + '</td><td>' + esc(l.party || '') + '</td><td style="text-align:right">' + amt(l.debit_paise) + '</td><td style="text-align:right">' + amt(l.credit_paise) + '</td></tr>').join('') +
@@ -116,6 +118,8 @@
       (j.status === 'draft' && ['manual', 'opening'].includes(j.source) && RB.has('accounts.edit') && !j.period_locked ? '<button id="jm-edit">Change draft</button>' : '') +
       (j.status === 'draft' && (mine || RB.has('accounts.delete')) ? '<button class="danger" id="jm-deldraft">Delete draft</button>' : '') +
       (j.can_reverse ? '<button id="jm-rev">Reverse…</button>' : '') +
+      (j.can_correct ? '<button id="jm-correct">Reverse and correct…</button>' : '') +
+      (j.can_copy ? '<button id="jm-copy">Clone</button>' : '') +
       (j.can_hard_delete && !j.period_locked ? '<button class="danger" id="jm-hard">Fully delete (learning phase)…</button>' : '') +
       '<button id="jm-print">Print</button><button data-close>Close</button></div>', { wide: true });
     // fn may return the message to show (e.g. the new journal number).
@@ -143,6 +147,23 @@
         catch (e) { RB.modalMsg(r, e.message); }
       });
     });
+    on('#jm-copy', () => { m.close(); journalEditor(j, refresh, 'copy'); });
+    on('#jm-correct', () => {
+      const r = RB.modal('<h2>Reverse and correct ' + esc(j.journal_no) + '</h2><div class="m-msg"></div>' +
+        '<p class="muted">Two things happen together: a mirror journal is posted to cancel ' + esc(j.journal_no) + ', and a draft copy of it opens for you to put right. ' +
+        'The copy is posted (approved) the usual way.</p>' +
+        RB.field('rc-date', 'Date (for the reversal and the corrected journal)', '<input type="date" id="rc-date" value="' + (j.period_locked ? RB.today() : j.journal_date) + '">', 'Must be in an open month, on or after ' + RB.fmtDate(j.journal_date) + '.', true) +
+        RB.field('rc-why', 'What was wrong?', RB.inp('rc-why', ''), null, true) +
+        '<div class="actions"><button class="primary" id="rc-go">Reverse and open the copy</button><button data-close>Cancel</button></div>');
+      $('#rc-go', r.el).addEventListener('click', async () => {
+        try {
+          const out = await RB.rpc('rb_reverse_and_copy_journal', { p_id: j.id, p_date: $('#rc-date', r.el).value, p_reason: $('#rc-why', r.el).value });
+          r.close(); m.close(); RB.toast('Reversed as ' + out.reversal_no + '. Now correct the copy.'); refresh();
+          const d = await RB.rpc('rb_journal_detail', { p_id: out.draft_id });
+          journalEditor(d, refresh, 'correct');
+        } catch (e) { RB.modalMsg(r, e.message); }
+      });
+    });
     on('#jm-hard', async () => {
       const word = await RB.confirmTyped('Fully delete ' + j.journal_no + '?', 'It was entered by ' + esc(j.entered_name) + ', who is still in their learning phase. The journal disappears from the books completely. This cannot be undone.', 'DELETE');
       if (word) run(() => RB.rpc('rb_hard_delete_journal', { p_id: j.id }), 'Journal deleted');
@@ -150,21 +171,29 @@
   }
 
   // The journal form: date, what for, default department, and lines.
-  async function journalEditor(j, refresh) {
+  // mode: 'copy' (Clone: a new draft from j's lines), 'correct' (the draft made by
+  // Reverse and correct), otherwise new (j empty) or change draft.
+  async function journalEditor(j, refresh, mode) {
+    const copy = mode === 'copy' && j ? j : null;
+    if (copy) j = null;
+    const src = copy || j;
     const L = await lists();
     const postable = L.accounts.filter((a) => a.level === 'posting' && a.e002_active && a.status === 'Active' && a.statement !== 'CONSOL' && a.control_type !== 'item');
     const depts = L.departments.filter((d) => d.is_active);
     const deptOpts = depts.map((d) => [d.id, d.code + ' ' + d.name]);
     const defDept = (L.departments.find((d) => d.code === 'CC005' && d.is_active) || depts[0] || {}).id;
-    let lines = j ? j.lines.map((l) => ({ account_code: l.account_code, department_id: l.department_id, debit: RB.fromPaise(l.debit_paise || null), credit: RB.fromPaise(l.credit_paise || null),
+    let lines = src ? src.lines.map((l) => ({ account_code: l.account_code, department_id: l.department_id, debit: RB.fromPaise(l.debit_paise || null), credit: RB.fromPaise(l.credit_paise || null),
       customer_id: l.customer_id, supplier_id: l.supplier_id, partner_id: l.partner_id, counterparty_entity: l.counterparty_entity, narration: l.narration }))
       : [{}, {}];
-    const m = RB.modal('<h2>' + (j ? 'Change draft journal' : 'New journal') + '</h2><div class="m-msg"></div>' +
+    const title = copy ? 'Copy of ' + (copy.journal_no || 'draft journal') : mode === 'correct' ? 'Correct the copy of ' + (j.copied_from_no || 'the journal') : j ? 'Change draft journal' : 'New journal';
+    const m = RB.modal('<h2>' + esc(title) + '</h2><div class="m-msg"></div>' +
+      (copy ? '<p class="muted">A new draft with the same lines. Change what you need, then save it. Nothing is in the books until it is posted.</p>' : '') +
+      (mode === 'correct' ? '<p class="muted">The original is reversed. This copy is already saved as a draft: change what was wrong, then save. If you close this now, the draft waits in the journal list.</p>' : '') +
       '<datalist id="je-accounts">' + postable.map((a) => '<option value="' + esc(accName(a)) + '">').join('') + '</datalist>' +
       '<div class="row">' + RB.field('je-date', 'Date', '<input type="date" id="je-date" value="' + esc(j ? j.journal_date : RB.today()) + '">', null, true) +
-      RB.field('je-dept', 'Department (for every line unless changed)', RB.sel('je-dept', deptOpts, j && j.lines[0] ? j.lines[0].department_id : defDept)) +
-      RB.field('je-kind', 'Kind', RB.sel('je-kind', [['manual', 'Manual journal'], ['opening', 'Opening balance']], j ? j.source : 'manual')) + '</div>' +
-      RB.field('je-narr', 'What is this journal for?', RB.inp('je-narr', j ? j.narration : '', ' placeholder="e.g. Electricity bill for October, paid in cash"'), null, true) +
+      RB.field('je-dept', 'Department (for every line unless changed)', RB.sel('je-dept', deptOpts, src && src.lines[0] ? src.lines[0].department_id : defDept)) +
+      RB.field('je-kind', 'Kind', RB.sel('je-kind', [['manual', 'Manual journal'], ['opening', 'Opening balance']], src && src.source === 'opening' ? 'opening' : 'manual')) + '</div>' +
+      RB.field('je-narr', 'What is this journal for?', RB.inp('je-narr', src ? src.narration : '', ' placeholder="e.g. Electricity bill for October, paid in cash"'), null, true) +
       '<div id="je-lines"></div><div class="actions"><button id="je-addline">+ Add line</button></div>' +
       '<p id="je-total" style="font-weight:600"></p>' +
       '<p class="muted">Stock accounts are not offered here: stock and its value move only through Purchases, Stock and Sales. Receivable, payable and partner accounts ask for the customer, supplier or partner.</p>' +
@@ -229,7 +258,7 @@
         const out = lines.map((l) => ({ account_code: l.account_code, debit_paise: RB.toPaise(l.debit), credit_paise: RB.toPaise(l.credit),
           department_id: l.department_id || null, customer_id: l.customer_id || null, supplier_id: l.supplier_id || null,
           partner_id: l.partner_id || null, counterparty_entity: l.counterparty_entity || null, narration: l.narration || null }));
-        const id = await RB.rpc('rb_save_journal', { p: { id: j ? j.id : null, journal_date: $('#je-date', m.el).value, narration: $('#je-narr', m.el).value,
+        const id = await RB.rpc('rb_save_journal', { p: { id: j ? j.id : null, copied_from: copy ? copy.id : null, journal_date: $('#je-date', m.el).value, narration: $('#je-narr', m.el).value,
           source: $('#je-kind', m.el).value, department_id: Number($('#je-dept', m.el).value), lines: out } });
         m.close(); RB.toast('Draft saved'); refresh(); journalModal(id, refresh);
       } catch (e) { RB.modalMsg(m, e.message); m.el.scrollTop = 0; }

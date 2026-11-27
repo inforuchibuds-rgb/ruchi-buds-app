@@ -162,6 +162,48 @@ select rb_hard_delete_journal(:j2);
 select t_ok(not exists (select 1 from journals where id = :j2), 'Director fully deletes a learning-phase user''s posted journal');
 select t_ok(not exists (select 1 from audit_log where action ilike '%DELETE%' and record_id = :j2::text), 'Learning-phase delete is not in the audit log (spec section 4)');
 
+-- 6b. Clone, and Reverse and correct (version 1.1)
+-- Reverse and correct DS's Water bill: reversal posted, draft copy saved, same lines
+select t_err(format($$select rb_reverse_and_copy_journal(%s, '2026-11-27', ' ')$$, :j3), 'reason');
+select t_ok((select status from journals where id = :j3) = 'posted' and not exists (select 1 from journals where copied_from = :j3),
+            'A failed Reverse and correct changes nothing');
+select t_err(format($$select rb_reverse_and_copy_journal(%s, '2026-11-27', 'x')$$, :r1), 'itself a reversal');
+select rb_reverse_and_copy_journal(:j3, '2026-11-27', 'Water bill was ₹250, not ₹300') as rc \gset
+select (:'rc'::jsonb->>'draft_id')::bigint as d1, (:'rc'::jsonb->>'reversal_id')::bigint as rv3 \gset
+select t_ok((select status from journals where id = :j3) = 'reversed' and (select reversal_of from journals where id = :rv3) = :j3
+        and (:'rc'::jsonb->>'reversal_no') like 'TRN/2611/%', 'Reverse and correct posts the reversal');
+select t_ok((select status = 'draft' and copied_from = :j3 and journal_date = '2026-11-27' and source = 'manual' and narration = 'Water bill'
+                    and entered_by = (select entered_by from journals where id = :j3) and total_paise = 30000 from journals where id = :d1)
+        and (select count(*) from journal_lines where journal_id = :d1) = 2
+        and (select sum(debit_paise) from journal_lines where journal_id = :d1 and account_code = '70030105') = 30000,
+        'and saves a draft copy with the same lines on the same date');
+select t_ok((select count(*) from audit_log where action = 'REVERSE_AND_COPY' and record_id = :j3::text) = 1, 'Reverse and correct is in the audit log');
+select t_ok((rb_journal_detail(:d1)->>'copied_from_no') = (select journal_no from journals where id = :j3)
+        and jsonb_array_length(rb_journal_detail(:j3)->'copies') = 1, 'The journal screen shows the copy and where it came from');
+select t_ok((rb_journal_detail(:j3)->>'can_correct')::boolean is false and (rb_journal_detail(:j3)->>'can_copy')::boolean, 'A reversed journal can be cloned, not corrected again');
+-- Correct the draft; the person who made it cannot post it, a second Director can
+select rb_save_journal(jsonb_build_object('id', :d1, 'journal_date','2026-11-27','narration','Water bill','department_id',(select id from departments where code='CC001'),
+  'lines', jsonb_build_array(jsonb_build_object('account_code','70030105','debit_paise',25000), jsonb_build_object('account_code','10010110','credit_paise',25000))));
+select t_ok((select copied_from from journals where id = :d1) = :j3, 'Changing the draft keeps the link');
+select t_err(format('select rb_post_journal(%s)', :d1), 'someone other than the person');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d2', false);
+select t_ok(rb_post_journal(:d1) like 'TRN/2611/%', 'A second person posts the corrected journal');
+select t_ok(t_tb('2026-11-01', '2026-11-30', '70030105') = (select coalesce(sum(debit_paise - credit_paise), 0) from journal_lines jl join journals j on j.id = jl.journal_id
+              where jl.account_code = '70030105' and j.status <> 'draft' and jl.journal_date between '2026-11-01' and '2026-11-30')
+        and (select sum(debit_paise - credit_paise) from journal_lines where account_code = '70030105' and journal_id in (:j3, :rv3, :d1)) = 25000,
+        'Books show the corrected ₹250 only');
+-- Clone: a new draft from any journal, remembering where it came from
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
+select rb_save_journal(jsonb_build_object('copied_from', :j1, 'journal_date','2026-11-28','narration','Electricity bill','department_id',(select id from departments where code='CC005'),
+  'lines', jsonb_build_array(jsonb_build_object('account_code','80020110','debit_paise',85000), jsonb_build_object('account_code','10010110','credit_paise',85000)))) as c1 \gset
+select t_ok((select copied_from = :j1 and status = 'draft' from journals where id = :c1), 'Clone saves a new draft linked to the original');
+select t_ok((select status from journals where id = :j1) = 'reversed', 'Cloning leaves the original as it was');
+select rb_delete_draft_journal(:c1);
+-- Staff cannot use it
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000c1', false);
+select t_err(format($$select rb_reverse_and_copy_journal(%s, '2026-11-27', 'x')$$, :j1), 'right to enter journals');
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000d1', false);
+
 -- 7. Month lock
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-0000000000a1', false);
 select t_err($$select rb_lock_period('2026-10-01', true)$$, 'right to lock');
