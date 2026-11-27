@@ -22,7 +22,7 @@
 --   liability is recorded for the lease itself. Security deposits paid
 --   and returned are recorded, and each month's rent is entered as an
 --   expense (module 6) straight from the lease.
---   One month-end step (LME) posts, for every loan and lease: interest
+--   One month-end step (ME series) posts, for every loan and lease: interest
 --   and finance charges accrued up to month-end, depreciation of leased
 --   assets, and the straight-line rent adjustment. It is run before
 --   module 6's step 1, because depreciation of kitchen assets and
