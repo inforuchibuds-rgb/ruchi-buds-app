@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · purchases.js · Version 1.0 · 26-Nov-2026
+// RUCHI BUDS APP · purchases.js · Version 1.1 · 27-Nov-2026
 // Module 3 screen "Purchases": the Purchase window (order, receive, bill,
 // matched side by side), direct purchases with no PO, every difference
 // with Accept or Reject, returns, supplier payments, supplier balances and
@@ -287,7 +287,7 @@
       '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x1">Download to Excel</button></div><div id="rp-g1"></div></div>' +
       '<div class="card"><h2>Direct purchases by month</h2><p class="muted">Purchases with no PO, for the monthly review.</p>' +
       '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x2">Download to Excel</button></div><div id="rp-g2"></div></div>' +
-      '<div class="card"><h2>Stock bought so far</h2><p class="muted">Quantity and cost of raw materials and packaging from purchases. Production and sales come with modules 4 and 5.</p>' +
+      '<div class="card"><h2>Stock bought so far</h2><p class="muted">Quantity and cost of raw materials and packaging from purchases. Production is on the Production screen; sales come with module 5.</p>' +
       '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x3">Download to Excel</button></div><div id="rp-g3"></div></div>';
     const month = (c) => { const v = c.getValue(); return v ? RB.fmtDate(v).slice(3) : ''; };
     let g1, g2, g3;
