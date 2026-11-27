@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.3 · 27-Nov-2026 (Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out)
+// RUCHI BUDS APP · core.js · Version 1.4 · 27-Nov-2026 (1.3: Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out; 1.4: online shop alerts on the home screen)
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -429,6 +429,8 @@
         '<span class="ico" aria-hidden="true">' + (ICONS[s.icon] || '•') + '</span>' + RB.esc(s.name) +
         (s.available ? '' : '<span class="soon">Module ' + s.module + '</span>') + '</a>').join('') +
       '</nav>' + (mine.length ? '' : '<p class="muted">No screens are ticked for you yet. Ask a Director or the FC.</p>');
+    // Online shop orders waiting (module 10).
+    if (RB.shopAlerts) RB.shopAlerts(true);
   };
 
   // ---------- change password ----------

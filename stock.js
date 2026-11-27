@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · stock.js · Version 1.1 · 27-Nov-2026
+// RUCHI BUDS APP · stock.js · Version 1.2 · 27-Nov-2026
 // Module 4 screens "Production" and "Stock". Production: the Production
 // window (Preparation, Final production, or Prepare and produce
 // together), the batch window, the batch list, the yield report and
@@ -554,11 +554,19 @@
 
   async function finishedTab(tb) {
     tb.innerHTML = '<p class="muted">Finished goods are counted in bottles and pouches. They leave stock only through an invoice (module 5). ' +
-      'Sellable by-products are listed too. Tap a line to see its movements.</p><div id="fn-grid"></div>';
+      'Sellable by-products are listed too. <b>On hold</b> = packs in online orders not yet dispatched: they cannot be sold at the counter. Tap a line to see its movements.</p><div id="fn-grid"></div>';
     let grid;
     asOf(tb, 'fn', async (dt) => {
-      const rows = await RB.rpc('rb_stock_list', { p_as_of: dt });
-      grid = RB.grid($('#fn-grid', tb), stockCols(true), rows.filter((r) => ['finished', 'byproduct'].includes(r.kind)).map(withAvg));
+      const [rows, holds] = await Promise.all([RB.rpc('rb_stock_list', { p_as_of: dt }),
+        RB.rpc('rb_shop_holds').catch(() => [])]);  // packs held by online orders (module 10)
+      const held = Object.fromEntries((holds || []).map((h) => [h.pack_id, Number(h.held)]));
+      const cols = stockCols(true);
+      cols[3].title = 'Total packs';
+      if (holds && holds.length !== undefined) cols.splice(4, 0,
+        { title: 'On hold (online)', field: 'held', hozAlign: 'right', headerFilter: false, formatter: (c) => (c.getValue() ? trim(c.getValue()) : '') },
+        { title: 'Free to sell', field: 'free', hozAlign: 'right', headerFilter: false, formatter: (c) => (c.getValue() == null ? '' : '<b>' + trim(c.getValue()) + '</b>') });
+      grid = RB.grid($('#fn-grid', tb), cols, rows.filter((r) => ['finished', 'byproduct'].includes(r.kind)).map(withAvg)
+        .map((r) => Object.assign(r, { held: held[r.pack_id] || 0, free: r.packs == null ? null : Math.max(0, Math.floor(Number(r.packs)) - (held[r.pack_id] || 0)) })));
       grid.on('rowClick', (e, row) => movesModal(row.getData()));
     });
     $('#fn-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Finished goods stock'));

@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · invoices.js · Version 1.1 · 27-Nov-2026
+// RUCHI BUDS APP · invoices.js · Version 1.2 · 27-Nov-2026
 // Module 5 screens "Invoices", "Receipts" and the money side of
 // "Customers": the printable invoice (Print / Save as PDF), returns and
 // credit notes from an invoice, receiving money and setting it against
@@ -110,7 +110,12 @@
       '<tr><td>Payment</td><td>' + esc(SA().MODES[s.payment_mode]) + (s.payment_ref ? ', ref ' + esc(s.payment_ref) : '') + '</td></tr></table></div></div>' +
       '<div class="grid-wrap"><table class="inv-lines"><thead><tr><th>#</th><th>Item</th>' + (hsn ? '<th>HSN</th>' : '') + '<th class="n">Qty</th><th class="n">Rate</th><th class="n">Amount</th><th class="n">Discount</th>' +
       (tax ? '<th class="n">Taxable</th>' : '') + gstCols.map((g) => '<th class="n">' + g + '</th>').join('') + '<th class="n">Total</th></tr></thead><tbody>' +
-      x.lines.map((l, i) => lineRow(l, i + 1)).join('') + '</tbody><tfoot><tr><td colspan="' + colsBefore + '" class="n">Totals</td>' +
+      x.lines.map((l, i) => lineRow(l, i + 1)).join('') +
+      (Number(s.delivery_paise) ? '<tr><td></td><td>Delivery charge</td>' + (hsn ? '<td></td>' : '') + '<td></td><td></td><td class="n">' + RB.rupees(s.delivery_paise) + '</td><td></td>' +
+        (tax ? '<td class="n">' + RB.rupees(s.delivery_paise) + '</td>' + (s.inter_state ? '<td class="n">' + RB.rupees(s.delivery_gst_paise) + '</td>'
+          : '<td class="n">' + RB.rupees(Math.round(Number(s.delivery_gst_paise) / 2)) + '</td><td class="n">' + RB.rupees(Number(s.delivery_gst_paise) - Math.round(Number(s.delivery_gst_paise) / 2)) + '</td>') : '') +
+        '<td class="n"><b>' + RB.rupees(Number(s.delivery_paise) + Number(s.delivery_gst_paise)) + '</b></td></tr>' : '') +
+      '</tbody><tfoot><tr><td colspan="' + colsBefore + '" class="n">Totals</td>' +
       '<td class="n">' + RB.rupees(s.discount_paise) + '</td>' + (tax ? '<td class="n">' + RB.rupees(s.taxable_paise) + '</td>' : '') +
       (tax ? (s.inter_state ? '<td class="n">' + RB.rupees(s.igst_paise) + '</td>' : '<td class="n">' + RB.rupees(s.cgst_paise) + '</td><td class="n">' + RB.rupees(s.sgst_paise) + '</td>') : '') +
       '<td class="n"><b>' + RB.rupees(s.total_paise) + '</b></td></tr></tfoot></table></div>' +

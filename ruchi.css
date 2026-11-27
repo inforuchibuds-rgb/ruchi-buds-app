@@ -1,5 +1,5 @@
 /* =====================================================================
-   RUCHI BUDS APP · ruchi.css · Version 1.4 · 27-Nov-2026
+   RUCHI BUDS APP · ruchi.css · Version 1.5 · 27-Nov-2026
    Brand colours and the spreadsheet-style look shared by every screen.
    ===================================================================== */
 :root {
@@ -321,3 +321,54 @@ details > summary { cursor: pointer; font-weight: 600; margin: .5rem 0; padding:
 .rs-job:last-child { border-bottom: 0; }
 .rs-job-main { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
 .rs-job-main small { display: block; color: var(--muted); margin: .1rem 0 .25rem; }
+
+/* ---------- module 10: the online shop (shop.html) and its staff screen ---------- */
+.sf-banner .wordmark { height: 34px; }
+.sf-head-link { color: #FFF; font-weight: 700; text-decoration: none; border: 1px solid rgba(255,255,255,.5); border-radius: 6px; padding: .45rem .8rem; min-height: var(--tap); display: inline-flex; align-items: center; }
+.sf-main { padding-bottom: 6rem; }
+.sf-intro { margin-bottom: 1rem; }
+.sf-intro p { margin: .25rem 0; }
+.sf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: .75rem; }
+@media (min-width: 700px) { .sf-grid { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .9rem; } }
+.sf-card { background: var(--white); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.sf-photo { position: relative; aspect-ratio: 4 / 3; background: var(--cream); display: flex; align-items: center; justify-content: center; font-size: 3rem; }
+.sf-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sf-card.out .sf-photo img { filter: grayscale(.8); opacity: .6; }
+.sf-sold { position: absolute; top: .6rem; left: .6rem; background: var(--brown); color: #FFF; font-weight: 800; font-size: .8rem; letter-spacing: .08em; padding: .25rem .55rem; border-radius: 4px; }
+.sf-body { padding: .75rem .85rem .85rem; display: flex; flex-direction: column; gap: .3rem; flex: 1; }
+.sf-body h2 { font-size: 1.05rem; margin: 0; color: var(--brown); }
+.sf-desc { margin: 0; font-size: .9rem; }
+.sf-price { font-size: 1.2rem; font-weight: 800; color: var(--ruchi-red); margin-top: auto; }
+.sf-price small { font-size: .75rem; font-weight: 400; color: var(--muted); }
+.sf-tags { min-height: 1.2rem; }
+.sf-body > button { width: 100%; }
+.sf-qty { display: inline-flex; align-items: center; gap: .6rem; }
+.sf-qty button { width: var(--tap); padding: 0; font-size: 1.3rem; }
+.sf-qty b { min-width: 1.5rem; text-align: center; font-size: 1.1rem; }
+.sf-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; background: var(--white); border-top: 2px solid var(--ruchi-red);
+  display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .6rem 1rem calc(.6rem + env(safe-area-inset-bottom)); font-weight: 700; box-shadow: 0 -2px 10px rgba(0,0,0,.08); }
+.btn.primary { background: var(--ruchi-red); color: var(--white); border-color: var(--ruchi-red); }
+.sf-check { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 1rem; align-items: start; }
+.sf-check .card, .sf-order .card { margin: 0 0 1rem; }
+table.sf-lines { width: 100%; border-collapse: collapse; }
+table.sf-lines td { padding: .5rem .25rem; border-bottom: 1px solid var(--line); vertical-align: middle; }
+table.sf-lines td.n { text-align: right; white-space: nowrap; font-weight: 700; font-variant-numeric: tabular-nums; }
+.sf-sum { margin: .75rem 0; }
+.sf-sum > div { display: flex; justify-content: space-between; padding: .2rem 0; font-variant-numeric: tabular-nums; }
+.sf-sum .sf-total { border-top: 2px solid var(--line); margin-top: .3rem; padding-top: .45rem; font-size: 1.15rem; }
+.sf-go { width: 100%; font-size: 1.05rem; }
+.sf-order { max-width: 640px; margin: 0 auto; }
+.sf-status { border-top: 5px solid var(--ruchi-yellow); }
+.sf-status.paid, .sf-status.cod, .sf-status.packed, .sf-status.dispatched, .sf-status.delivered { border-top-color: var(--leaf); }
+.sf-status.cancelled, .sf-status.expired { border-top-color: #999; }
+.sf-status small { color: var(--muted); }
+.sf-status h1 { margin: .2rem 0 .3rem; }
+.sf-timer b { font-size: 1.2rem; font-variant-numeric: tabular-nums; color: var(--ruchi-red); }
+.sf-pay { text-align: center; }
+.sf-qr { width: min(240px, 70vw); margin: .5rem auto; background: #FFF; }
+.sf-qr svg { width: 100%; height: auto; display: block; }
+/* staff screen */
+.sh-alert { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; justify-content: space-between; }
+.tile .count { background: var(--ruchi-red); color: #FFF; border-radius: 999px; font-size: .75rem; padding: .05rem .5rem; }
+.sh-photo { width: 64px; height: 48px; object-fit: cover; border-radius: 4px; display: block; background: var(--cream); }
+.sh-link { word-break: break-all; }
