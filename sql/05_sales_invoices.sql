@@ -1,6 +1,9 @@
 -- =====================================================================
 -- RUCHI BUDS APP · Module 5: Sales, invoices and customer balances (AR)
--- File: 05_sales_invoices.sql · Version 1.0 · 27-Nov-2026
+-- File: 05_sales_invoices.sql · Version 1.1 · 27-Nov-2026
+-- 1.1: bad debts. An unpaid invoice (or an earlier balance) can be written
+--      off with a reason by the FC or a Director, and money later
+--      received from that customer can be booked as bad debts recovered.
 --
 -- What this file sets up:
 --   Sales from finished-goods stock, by pack (e.g. 200 g bottle) or
@@ -15,7 +18,8 @@
 --   the accounts team only. Customer receipts against open invoices,
 --   money on account, customer balances with ageing, the customer ledger
 --   and statements (printable, and shareable as a link), and a sales
---   summary by day, product and customer type.
+--   summary by day, product and customer type. Bad debts written off
+--   (BD/YYMM/00001) and bad debts recovered (BDR/YYMM/00001).
 --
 -- Accounting (Indian AS, ICAI): revenue is recognised when the goods are
 -- handed over and the invoice is raised (AS 9). Sales are credited at
@@ -26,7 +30,10 @@
 -- and its stock put back at the cost it left at (or, if spoilt, charged
 -- as a stock loss). The customer balance is the "Trade Receivables"
 -- account kept per customer, so the customer ledger always agrees with
--- the books.
+-- the books. A bad debt written off is charged to "Bad Debt
+-- Write-offs" and taken off the customer balance; money later received
+-- for it is income ("Other Non-operating Income", bad debts recovered).
+-- The provision for doubtful debts at month-end comes with module 6.
 --
 -- GST: until the "GST registered from" date in Settings, no GST is
 -- charged and only "Invoice" can be chosen. From that date, "Tax
@@ -51,6 +58,14 @@ alter table app_settings add column if not exists sale_prices_include_gst boolea
 alter table app_settings add column if not exists invoice_footer text;
 -- How long a shared customer statement link stays open.
 alter table app_settings add column if not exists statement_link_days int not null default 30;
+-- New right: write off bad debts and book their recovery. Directors and
+-- the FC always have every right; no other category gets it by default.
+insert into powers (code, name, description, sort) values
+  ('write_off_debts', 'Write off bad debts', 'Write off an unpaid invoice or balance as a bad debt, and book money later recovered', 67)
+on conflict (code) do nothing;
+insert into permissions (code, kind, power_code, sort) values ('power.write_off_debts', 'power', 'write_off_debts', 10067)
+on conflict (code) do nothing;
+
 do $$
 begin
   if not exists (select 1 from pg_constraint where conname = 'app_settings_statement_link_days_check') then
@@ -269,6 +284,55 @@ create table if not exists statement_links (
   is_training  boolean not null default false
 );
 
+-- Bad debts written off: one invoice, or an earlier balance (sale_id blank).
+create table if not exists customer_write_offs (
+  id                  bigserial primary key,
+  write_off_no        text not null unique,
+  customer_id         int not null references customers(id),
+  sale_id             bigint references sales(id) on delete cascade,
+  write_off_date      date not null,
+  amount_paise        bigint not null check (amount_paise > 0),
+  reason              text not null,
+  department_id       int references departments(id),
+  status              text not null default 'posted' check (status in ('posted', 'reversed')),
+  journal_id          bigint references journals(id) on delete set null,
+  reversal_journal_id bigint references journals(id) on delete set null,
+  reverse_reason      text,
+  entered_by          uuid references app_users(id),
+  entered_at          timestamptz not null default now(),
+  is_demo             boolean not null default false,
+  is_training         boolean not null default false
+);
+create index if not exists customer_write_offs_customer_idx on customer_write_offs (customer_id);
+alter table sales add column if not exists written_off_paise bigint not null default 0;
+
+-- Money received later for a bad debt: booked as income, and the money on
+-- account it came in as is set against it (allocations with recovery_id).
+create table if not exists bad_debt_recoveries (
+  id                  bigserial primary key,
+  recovery_no         text not null unique,
+  write_off_id        bigint not null references customer_write_offs(id) on delete cascade,
+  customer_id         int not null references customers(id),
+  recovery_date       date not null,
+  amount_paise        bigint not null check (amount_paise > 0),
+  note                text,
+  status              text not null default 'posted' check (status in ('posted', 'reversed')),
+  journal_id          bigint references journals(id) on delete set null,
+  reversal_journal_id bigint references journals(id) on delete set null,
+  reverse_reason      text,
+  entered_by          uuid references app_users(id),
+  entered_at          timestamptz not null default now(),
+  is_demo             boolean not null default false,
+  is_training         boolean not null default false
+);
+alter table ar_allocations add column if not exists recovery_id bigint;
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'ar_allocations_recovery_fk') then
+    alter table ar_allocations add constraint ar_allocations_recovery_fk foreign key (recovery_id) references bad_debt_recoveries(id) on delete cascade;
+  end if;
+end $$;
+
 -- Stock movements now also name the invoice or return that made them.
 alter table stock_moves add column if not exists sale_id bigint;
 alter table stock_moves add column if not exists sales_return_id bigint;
@@ -295,7 +359,11 @@ insert into posting_rules (event_code, line_key, side, account_code, module, lab
   ('sales_return',    'write_off',         'debit',  '70010150', 5, 'Returned goods spoilt: charged as a stock loss', 98),
   ('customer_refund', 'receivable',        'debit',  '10020105', 5, 'Refund to a customer (per customer)', 103),
   ('customer_refund', 'cash',              'credit', '10010110', 5, 'Refund paid in cash', 104),
-  ('customer_refund', 'bank',              'credit', '10010205', 5, 'Refund paid by UPI or bank', 105)
+  ('customer_refund', 'bank',              'credit', '10010205', 5, 'Refund paid by UPI or bank', 105),
+  ('bad_debt',        'expense',           'debit',  '80080110', 5, 'Bad debt written off', 106),
+  ('bad_debt',        'receivable',        'credit', '10020105', 5, 'Bad debt taken off the customer balance (per customer)', 107),
+  ('bad_debt_recovery', 'receivable',      'debit',  '10020105', 5, 'Bad debt recovered: back on the customer balance, set against the money received', 108),
+  ('bad_debt_recovery', 'income',          'credit', '90010135', 5, 'Bad debts recovered (other income)', 109)
 on conflict (event_code, line_key) do nothing;
 -- Refunds have their own entry now (above), so this one from module 2 is not used.
 delete from posting_rules where event_code = 'sales_return' and line_key = 'refund_cash';
@@ -411,7 +479,10 @@ begin
                                where a.sale_id = p_id and coalesce(r.status, t.status) = 'posted'), 0)
   where id = p_id;
   update sales set
-    outstanding_paise = case when status = 'cancelled' then 0 else total_paise - paid_at_sale_paise - credited_paise end
+    written_off_paise = coalesce((select sum(w.amount_paise) from customer_write_offs w where w.sale_id = p_id and w.status = 'posted'), 0)
+  where id = p_id;
+  update sales set
+    outstanding_paise = case when status = 'cancelled' then 0 else total_paise - paid_at_sale_paise - credited_paise - written_off_paise end
   where id = p_id;
   update sales set status = case when status = 'cancelled' then 'cancelled' when outstanding_paise <= 0 then 'paid' else 'open' end
   where id = p_id;
@@ -922,6 +993,112 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------
+-- 6b. Bad debts: written off, and recovered later
+-- ---------------------------------------------------------------------
+
+-- How much of a write-off has not yet been recovered.
+create or replace function rb_sal_wo_left(p_id bigint)
+returns bigint language sql stable security definer set search_path = public as $$
+  select coalesce((select amount_paise from customer_write_offs where id = p_id and status = 'posted'), 0)
+       - coalesce((select sum(amount_paise) from bad_debt_recoveries where write_off_id = p_id and status = 'posted'), 0)
+$$;
+
+-- Write off a bad debt: one invoice (sale_id) or an earlier balance with no invoice in the app.
+-- p: customer_id, sale_id, write_off_date, amount_paise, reason
+create or replace function rb_sal_write_off(p jsonb, p_actor uuid, p_demo boolean)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare v_id bigint; v_c customers; v_s sales; v_date date := (p->>'write_off_date')::date; v_amt bigint := rb_int(p, 'amount_paise');
+        v_no text; v_j bigint; v_dept int; v_max bigint;
+begin
+  select * into v_c from customers where id = rb_int(p, 'customer_id') for update;
+  if v_c.id is null then raise exception 'Please choose the customer.'; end if;
+  if v_date is null then raise exception 'Please choose the date of the write-off.'; end if;
+  if rb_txt(p, 'reason') is null then raise exception 'Please give the reason the money cannot be collected.'; end if;
+  if coalesce(v_amt, 0) <= 0 then raise exception 'Please enter the amount to write off.'; end if;
+  perform rb_assert_period_open(v_date);
+  if rb_int(p, 'sale_id') is not null then
+    select * into v_s from sales where id = rb_int(p, 'sale_id') for update;
+    if v_s.id is null or v_s.customer_id <> v_c.id then raise exception 'That invoice is not for this customer.'; end if;
+    if v_s.status <> 'open' then raise exception '% has nothing left to pay, so nothing can be written off.', v_s.invoice_no; end if;
+    if v_date < v_s.invoice_date then raise exception 'A write-off cannot be dated before the invoice.'; end if;
+    v_max := v_s.outstanding_paise;
+    if v_amt > v_max then raise exception '% only has % left to pay.', v_s.invoice_no, rb_pur_fmt(v_max); end if;
+    v_dept := v_s.department_id;
+  else
+    v_max := greatest(rb_sal_other_balance(v_c.id), 0);
+    if v_amt > v_max then
+      raise exception 'The earlier balance (not on an invoice) of % is only %. To write off an invoice, open it.', v_c.name, rb_pur_fmt(v_max);
+    end if;
+    v_dept := rb_sal_dept(case when v_c.kind = 'trader' then 'trader' else 'retail' end);
+  end if;
+  v_no := rb_next_doc_no(rb_pur_series('BD', p_demo), v_date);
+  insert into customer_write_offs (write_off_no, customer_id, sale_id, write_off_date, amount_paise, reason, department_id,
+                                   entered_by, is_demo, is_training)
+  values (v_no, v_c.id, v_s.id, v_date, v_amt, rb_txt(p, 'reason'), v_dept, p_actor, p_demo, rb_is_training())
+  returning id into v_id;
+  v_j := rb_post_engine(jsonb_build_object('journal_date', v_date, 'source', 'sales', 'event_code', 'bad_debt',
+    'source_ref', v_no, 'narration', 'Bad debt written off: ' || v_c.name || coalesce(', ' || v_s.invoice_no, ', earlier balance') || ': ' || rb_txt(p, 'reason'),
+    'department_id', v_dept, 'is_demo', p_demo, 'entered_by', p_actor, 'approved_by', p_actor),
+    jsonb_build_array(
+      jsonb_build_object('rule', 'bad_debt.expense', 'amount_paise', v_amt),
+      jsonb_build_object('rule', 'bad_debt.receivable', 'amount_paise', v_amt, 'customer_id', v_c.id, 'narration', v_no)));
+  update customer_write_offs set journal_id = v_j where id = v_id;
+  if v_s.id is not null then perform rb_sal_refresh(v_s.id); end if;
+  perform rb_audit_write('BAD_DEBT_WRITE_OFF', 'customer_write_offs', v_id::text, null,
+    jsonb_build_object('write_off_no', v_no, 'customer', v_c.name, 'invoice_no', v_s.invoice_no, 'amount_paise', v_amt), rb_txt(p, 'reason'));
+  return v_id;
+end $$;
+
+-- Money later received for a bad debt. The money is first entered as a
+-- customer receipt (it then sits on account); this books it as income.
+-- p: write_off_id, recovery_date, amount_paise, note
+create or replace function rb_sal_recover(p jsonb, p_actor uuid, p_demo boolean)
+returns bigint language plpgsql security definer set search_path = public as $$
+declare v_id bigint; v_w customer_write_offs; v_c customers; v_date date := (p->>'recovery_date')::date;
+        v_amt bigint := rb_int(p, 'amount_paise'); v_left bigint; v_no text; v_j bigint; r record; v_take bigint; v_rest bigint;
+begin
+  select * into v_w from customer_write_offs where id = rb_int(p, 'write_off_id') for update;
+  if v_w.id is null or v_w.status <> 'posted' then raise exception 'That write-off was not found, or it has been reversed.'; end if;
+  select * into v_c from customers where id = v_w.customer_id for update;
+  if v_date is null then raise exception 'Please choose the date the money came in.'; end if;
+  if v_date < v_w.write_off_date then raise exception 'A recovery cannot be dated before the write-off.'; end if;
+  if coalesce(v_amt, 0) <= 0 then raise exception 'Please enter the amount recovered.'; end if;
+  perform rb_assert_period_open(v_date);
+  v_left := rb_sal_wo_left(v_w.id);
+  if v_amt > v_left then raise exception 'Only % of % is still written off.', rb_pur_fmt(v_left), v_w.write_off_no; end if;
+  if v_amt > (select coalesce(sum(rb_sal_source_left('receipt', x.id)), 0) from customer_receipts x
+              where x.customer_id = v_c.id and x.status = 'posted') or v_amt > rb_sal_free_credit(v_c.id) then
+    raise exception 'First enter the money received from % as a customer receipt (Customer receipts → Receive a payment). It then waits on account to be booked here.', v_c.name;
+  end if;
+  v_no := rb_next_doc_no(rb_pur_series('BDR', p_demo), v_date);
+  insert into bad_debt_recoveries (recovery_no, write_off_id, customer_id, recovery_date, amount_paise, note, entered_by, is_demo, is_training)
+  values (v_no, v_w.id, v_c.id, v_date, v_amt, rb_txt(p, 'note'), p_actor, p_demo, rb_is_training())
+  returning id into v_id;
+  v_j := rb_post_engine(jsonb_build_object('journal_date', v_date, 'source', 'sales', 'event_code', 'bad_debt_recovery',
+    'source_ref', v_no, 'narration', 'Bad debt recovered from ' || v_c.name || ' (written off in ' || v_w.write_off_no || ')',
+    'department_id', v_w.department_id, 'is_demo', p_demo, 'entered_by', p_actor, 'approved_by', p_actor),
+    jsonb_build_array(
+      jsonb_build_object('rule', 'bad_debt_recovery.receivable', 'amount_paise', v_amt, 'customer_id', v_c.id, 'narration', v_no),
+      jsonb_build_object('rule', 'bad_debt_recovery.income', 'amount_paise', v_amt)));
+  update bad_debt_recoveries set journal_id = v_j where id = v_id;
+  -- Use the money on account, oldest receipt first.
+  v_rest := v_amt;
+  for r in select x.id, rb_sal_source_left('receipt', x.id) left_paise from customer_receipts x
+           where x.customer_id = v_c.id and x.status = 'posted' and rb_sal_source_left('receipt', x.id) > 0
+           order by x.receipt_date, x.id loop
+    exit when v_rest <= 0;
+    v_take := least(v_rest, r.left_paise);
+    insert into ar_allocations (sale_id, receipt_id, recovery_id, amount_paise, created_by, is_demo, is_training)
+    values (null, r.id, v_id, v_take, p_actor, p_demo, rb_is_training());
+    v_rest := v_rest - v_take;
+  end loop;
+  perform rb_sal_assert_credit(v_c.id);
+  perform rb_audit_write('BAD_DEBT_RECOVERED', 'bad_debt_recoveries', v_id::text, null,
+    jsonb_build_object('recovery_no', v_no, 'write_off_no', v_w.write_off_no, 'customer', v_c.name, 'amount_paise', v_amt), rb_txt(p, 'note'));
+  return v_id;
+end $$;
+
+-- ---------------------------------------------------------------------
 -- 7. Journal guard: entries from the Sales screens are reversed there
 -- ---------------------------------------------------------------------
 
@@ -970,6 +1147,9 @@ begin
   if exists (select 1 from ar_allocations a join customer_receipts r on r.id = a.receipt_id where a.sale_id = p_id and r.status = 'posted') then
     raise exception 'Receipts are set against this invoice. Reverse those receipts first.';
   end if;
+  if exists (select 1 from customer_write_offs where sale_id = p_id and status = 'posted') then
+    raise exception 'Part of this invoice is written off as a bad debt. Reverse the write-off first.';
+  end if;
   select array_agg(distinct item_id) into v_items from stock_moves where sale_id = p_id;
   insert into stock_moves (move_date, item_id, pack_id, packs, qty_base, value_paise, kind, doc_no, sale_id, department_id, note,
                            created_by, is_demo, is_training)
@@ -1006,6 +1186,9 @@ begin
   end if;
   if exists (select 1 from ar_allocations where sale_id = p_id) then
     raise exception 'Receipts are set against this invoice. Delete or reverse those first.';
+  end if;
+  if exists (select 1 from customer_write_offs where sale_id = p_id) then
+    raise exception 'Part of this invoice was written off as a bad debt. It is kept.';
   end if;
   perform rb_assert_period_open(v_s.invoice_date);
   select array_agg(distinct item_id) into v_items from stock_moves where sale_id = p_id;
@@ -1104,6 +1287,9 @@ begin
   select * into v_r from customer_receipts where id = p_id for update;
   if v_r.id is null or v_r.status <> 'posted' then raise exception 'Only a posted receipt can be reversed.'; end if;
   if p_date is null or p_date < v_r.receipt_date then raise exception 'The reversal date cannot be before the receipt date.'; end if;
+  if exists (select 1 from ar_allocations a join bad_debt_recoveries b on b.id = a.recovery_id where a.receipt_id = p_id and b.status = 'posted') then
+    raise exception 'This money is booked as a bad debt recovered. Reverse the recovery first.';
+  end if;
   perform set_config('rb.sales', 'on', true);
   v_rev := rb_reverse_journal(v_r.journal_id, p_date, 'Receipt ' || v_r.receipt_no || ' reversed: ' || trim(p_reason));
   perform set_config('rb.sales', 'off', true);
@@ -1123,6 +1309,9 @@ begin
     raise exception 'Only receipts entered by someone still in their learning phase can be fully deleted. Reverse it instead.';
   end if;
   if v_r.status <> 'posted' then raise exception 'This receipt has been reversed. Reversed entries are kept.'; end if;
+  if exists (select 1 from ar_allocations where receipt_id = p_id and recovery_id is not null) then
+    raise exception 'This money is booked as a bad debt recovered. Reverse the recovery first.';
+  end if;
   perform rb_assert_period_open(v_r.receipt_date);
   select array_agg(distinct sale_id) into v_sales from ar_allocations where receipt_id = p_id;
   perform set_config('rb.ledger', 'on', true);
@@ -1154,6 +1343,79 @@ begin
   perform set_config('rb.sales', 'off', true);
   update customer_refunds set status = 'reversed', reversal_journal_id = v_rev, reverse_reason = trim(p_reason) where id = p_id;
   perform rb_audit_write('REVERSE_CUSTOMER_REFUND', 'customer_refunds', p_id::text, null, jsonb_build_object('refund_no', v_f.refund_no), trim(p_reason));
+end $$;
+
+-- Bad debts (FC and Directors, or anyone given "Write off bad debts").
+create or replace function rb_write_off_bad_debt(p jsonb)
+returns bigint language plpgsql security definer set search_path = public as $$
+begin
+  return rb_sal_write_off(p, rb_require('power.write_off_debts', 'write off bad debts'), false);
+end $$;
+
+create or replace function rb_reverse_bad_debt(p_id bigint, p_date date, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_me uuid := rb_require('power.write_off_debts', 'reverse bad debt write-offs'); v_w customer_write_offs; v_rev bigint;
+begin
+  if coalesce(trim(p_reason), '') = '' then raise exception 'Please give the reason for the reversal.'; end if;
+  select * into v_w from customer_write_offs where id = p_id for update;
+  if v_w.id is null or v_w.status <> 'posted' then raise exception 'Only a posted write-off can be reversed.'; end if;
+  if p_date is null or p_date < v_w.write_off_date then raise exception 'The reversal date cannot be before the write-off date.'; end if;
+  if exists (select 1 from bad_debt_recoveries where write_off_id = p_id and status = 'posted') then
+    raise exception 'Money has been recovered on this write-off. Reverse the recovery first.';
+  end if;
+  perform rb_assert_period_open(p_date);
+  perform set_config('rb.sales', 'on', true);
+  v_rev := rb_reverse_journal(v_w.journal_id, p_date, 'Bad debt ' || v_w.write_off_no || ' reversed: ' || trim(p_reason));
+  perform set_config('rb.sales', 'off', true);
+  update customer_write_offs set status = 'reversed', reversal_journal_id = v_rev, reverse_reason = trim(p_reason) where id = p_id;
+  if v_w.sale_id is not null then perform rb_sal_refresh(v_w.sale_id); end if;
+  perform rb_audit_write('REVERSE_BAD_DEBT', 'customer_write_offs', p_id::text, null, jsonb_build_object('write_off_no', v_w.write_off_no), trim(p_reason));
+end $$;
+
+create or replace function rb_record_bad_debt_recovery(p jsonb)
+returns bigint language plpgsql security definer set search_path = public as $$
+begin
+  return rb_sal_recover(p, rb_require('power.write_off_debts', 'book bad debts recovered'), false);
+end $$;
+
+create or replace function rb_reverse_bad_debt_recovery(p_id bigint, p_date date, p_reason text)
+returns void language plpgsql security definer set search_path = public as $$
+declare v_me uuid := rb_require('power.write_off_debts', 'reverse bad debt recoveries'); v_r bad_debt_recoveries; v_rev bigint;
+begin
+  if coalesce(trim(p_reason), '') = '' then raise exception 'Please give the reason for the reversal.'; end if;
+  select * into v_r from bad_debt_recoveries where id = p_id for update;
+  if v_r.id is null or v_r.status <> 'posted' then raise exception 'Only a posted recovery can be reversed.'; end if;
+  if p_date is null or p_date < v_r.recovery_date then raise exception 'The reversal date cannot be before the recovery date.'; end if;
+  perform rb_assert_period_open(p_date);
+  perform set_config('rb.sales', 'on', true);
+  v_rev := rb_reverse_journal(v_r.journal_id, p_date, 'Bad debt recovery ' || v_r.recovery_no || ' reversed: ' || trim(p_reason));
+  perform set_config('rb.sales', 'off', true);
+  update bad_debt_recoveries set status = 'reversed', reversal_journal_id = v_rev, reverse_reason = trim(p_reason) where id = p_id;
+  -- The money goes back on account.
+  delete from ar_allocations where recovery_id = p_id;
+  perform rb_audit_write('REVERSE_BAD_DEBT_RECOVERY', 'bad_debt_recoveries', p_id::text, null, jsonb_build_object('recovery_no', v_r.recovery_no), trim(p_reason));
+end $$;
+
+-- Every bad debt written off, with what has been recovered.
+create or replace function rb_bad_debts_list()
+returns table (id bigint, write_off_no text, write_off_date date, customer_id int, customer_name text, sale_id bigint, invoice_no text,
+               amount_paise bigint, recovered_paise bigint, left_paise bigint, reason text, status text, reverse_reason text,
+               entered_by_name text, recoveries jsonb, is_demo boolean)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not rb_sal_money_ok() then raise exception 'You do not have the right to see bad debts.'; end if;
+  return query
+  select w.id, w.write_off_no, w.write_off_date, w.customer_id, c.name, w.sale_id, s.invoice_no, w.amount_paise,
+         coalesce((select sum(r.amount_paise) from bad_debt_recoveries r where r.write_off_id = w.id and r.status = 'posted'), 0)::bigint,
+         case when w.status = 'posted' then rb_sal_wo_left(w.id) else 0 end,
+         w.reason, w.status, w.reverse_reason,
+         (select coalesce(u.short_name, u.full_name) from app_users u where u.id = w.entered_by),
+         coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'recovery_no', r.recovery_no, 'recovery_date', r.recovery_date,
+                     'amount_paise', r.amount_paise, 'status', r.status, 'note', r.note) order by r.id)
+                   from bad_debt_recoveries r where r.write_off_id = w.id), '[]'::jsonb),
+         w.is_demo
+  from customer_write_offs w join customers c on c.id = w.customer_id left join sales s on s.id = w.sale_id
+  order by w.write_off_date desc, w.id desc;
 end $$;
 
 -- Statement links, opened without signing in.
@@ -1277,6 +1539,11 @@ begin
                            'amount_paise', a.amount_paise, 'status', coalesce(c.status, t.status)) order by a.id)
                           from ar_allocations a left join customer_receipts c on c.id = a.receipt_id
                           left join sales_returns t on t.id = a.return_id where a.sale_id = p_id), '[]'::jsonb),
+    'write_offs', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'write_off_no', w.write_off_no, 'write_off_date', w.write_off_date,
+                           'amount_paise', w.amount_paise, 'reason', w.reason, 'status', w.status, 'reverse_reason', w.reverse_reason,
+                           'recovered_paise', coalesce((select sum(r.amount_paise) from bad_debt_recoveries r where r.write_off_id = w.id and r.status = 'posted'), 0),
+                           'is_demo', w.is_demo) order by w.id)
+                         from customer_write_offs w where w.sale_id = p_id and rb_sal_money_ok()), '[]'::jsonb),
     'firm', (select jsonb_build_object('firm_name', firm_name, 'address', address, 'phone', phone, 'email', email,
                'gstin', gstin, 'state_code', state_code, 'fssai_no', fssai_no, 'firm_reg_no', firm_reg_no, 'llpin', llpin,
                'legal_form', legal_form, 'wordmark_url', wordmark_url, 'invoice_footer', invoice_footer)
@@ -1286,7 +1553,8 @@ begin
       'cancel', rb_has('power.reverse_entries') and v_s.status <> 'cancelled',
       'delete', v_s.status <> 'cancelled' and rb_can_hard_delete('sales', v_s.entered_by),
       'return', rb_has('sales.add') and v_s.status <> 'cancelled',
-      'receive', rb_has('receipts.add') and v_s.status = 'open'));
+      'receive', rb_has('receipts.add') and v_s.status = 'open',
+      'write_off', rb_has('power.write_off_debts') and v_s.status = 'open'));
 end $$;
 
 create or replace function rb_sales_returns_list()
@@ -1349,7 +1617,11 @@ begin
         from customer_receipts r where r.customer_id = p_customer and r.status = 'posted' and rb_sal_source_left('receipt', r.id) > 0
         union all
         select 'return', t.id, t.return_no, t.return_date, rb_sal_source_left('return', t.id)
-        from sales_returns t where t.customer_id = p_customer and t.status = 'posted' and rb_sal_source_left('return', t.id) > 0) x), '[]'::jsonb));
+        from sales_returns t where t.customer_id = p_customer and t.status = 'posted' and rb_sal_source_left('return', t.id) > 0) x), '[]'::jsonb),
+    'write_offs', coalesce((select jsonb_agg(jsonb_build_object('id', w.id, 'write_off_no', w.write_off_no, 'write_off_date', w.write_off_date,
+                 'amount_paise', w.amount_paise, 'left_paise', rb_sal_wo_left(w.id), 'invoice_no', (select invoice_no from sales where id = w.sale_id))
+                 order by w.write_off_date, w.id)
+                 from customer_write_offs w where w.customer_id = p_customer and w.status = 'posted' and rb_sal_wo_left(w.id) > 0), '[]'::jsonb));
 end $$;
 
 -- Customer balances from the books, with ageing of open invoices by due date.
@@ -1434,7 +1706,7 @@ do $$
 declare t text;
 begin
   foreach t in array array['sales', 'sale_lines', 'sales_returns', 'sales_return_lines', 'customer_receipts', 'customer_refunds',
-                           'ar_allocations', 'statement_links'] loop
+                           'ar_allocations', 'statement_links', 'customer_write_offs', 'bad_debt_recoveries'] loop
     execute format('alter table %I enable row level security', t);
     execute format('revoke all on %I from anon, authenticated', t);
     execute format('grant select on %I to authenticated', t);
@@ -1467,7 +1739,8 @@ begin
                'rb_reverse_customer_receipt', 'rb_hard_delete_customer_receipt', 'rb_refund_customer', 'rb_reverse_customer_refund',
                'rb_create_statement_link', 'rb_revoke_statement_links', 'rb_public_statement', 'rb_save_sales_settings',
                'rb_sales_list', 'rb_sale_detail', 'rb_sales_returns_list', 'rb_customer_receipts_list', 'rb_customer_open_items',
-               'rb_customer_balances', 'rb_customer_statement', 'rb_sales_summary')) loop
+               'rb_customer_balances', 'rb_customer_statement', 'rb_sales_summary', 'rb_write_off_bad_debt', 'rb_reverse_bad_debt',
+               'rb_record_bad_debt_recovery', 'rb_reverse_bad_debt_recovery', 'rb_bad_debts_list')) loop
     execute format('revoke execute on function %s from public, anon, authenticated', f.sig);
     execute format('grant execute on function %s to service_role', f.sig);
   end loop;
@@ -1484,7 +1757,9 @@ grant execute on function
   rb_reverse_customer_refund(bigint, date, text), rb_create_statement_link(int, date), rb_revoke_statement_links(int),
   rb_save_sales_settings(jsonb), rb_sales_list(date, date), rb_sale_detail(bigint), rb_sales_returns_list(),
   rb_customer_receipts_list(), rb_customer_open_items(int), rb_customer_balances(date, boolean),
-  rb_customer_statement(int, date, date), rb_sales_summary(date, date)
+  rb_customer_statement(int, date, date), rb_sales_summary(date, date),
+  rb_write_off_bad_debt(jsonb), rb_reverse_bad_debt(bigint, date, text), rb_record_bad_debt_recovery(jsonb),
+  rb_reverse_bad_debt_recovery(bigint, date, text), rb_bad_debts_list()
   to authenticated;
 
 -- ---------------------------------------------------------------------
@@ -1601,6 +1876,33 @@ begin
     'return_date', '2026-11-27', 'condition', 'restock', 'reason', 'Customer changed their mind, seal intact (DEMO)',
     'lines', (select jsonb_agg(jsonb_build_object('sale_line_id', l.id, 'packs', 1)) from sale_lines l join sales s on s.id = l.sale_id
               where s.is_demo and s.customer_id = (cu->>'DEMO-C02')::int)), v_stf, true);
+end $$;
+
+-- ---------------------------------------------------------------------
+-- 12. DEMO bad debt (added in 1.1, so it also arrives on a re-run):
+--     Coastal Delights closes down; the FC writes off its invoice, then
+--     ₹1,000 comes in from the owner and is booked as recovered.
+-- ---------------------------------------------------------------------
+
+do $$
+declare
+  v_fc uuid := coalesce((select id from app_users where email = 'demo.fc@example.com'),
+                        (select id from app_users where lower(email) = 'info.ruchibuds@gmail.com'));
+  v_ar uuid := coalesce((select id from app_users where email = 'demo.ar@example.com'), v_fc);
+  v_c int := (select id from customers where code = 'DEMO-C10' and is_demo);
+  v_s sales; v_w bigint;
+begin
+  if not (select training_mode from app_settings where id = 1) or exists (select 1 from customer_write_offs where is_demo) then
+    return;
+  end if;
+  select * into v_s from sales where is_demo and customer_id = v_c and status = 'open' order by id limit 1;
+  if v_s.id is null then return; end if;
+  v_w := rb_sal_write_off(jsonb_build_object('customer_id', v_c, 'sale_id', v_s.id, 'write_off_date', '2026-11-27',
+    'amount_paise', v_s.outstanding_paise, 'reason', 'Restaurant closed down, owner not reachable (DEMO)'), v_fc, true);
+  perform rb_sal_receive(jsonb_build_object('customer_id', v_c, 'receipt_date', '2026-11-27', 'mode', 'upi', 'amount_paise', 100000,
+    'reference', 'UPI from the owner', 'note', 'Part of the written-off invoice (DEMO)'), v_ar, true);
+  perform rb_sal_recover(jsonb_build_object('write_off_id', v_w, 'recovery_date', '2026-11-27', 'amount_paise', 100000,
+    'note', 'Owner paid part by UPI (DEMO)'), v_fc, true);
 end $$;
 
 -- End of 05_sales_invoices.sql

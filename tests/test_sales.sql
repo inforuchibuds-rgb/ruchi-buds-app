@@ -54,7 +54,11 @@ select t_ok((select bool_and(invoice_date >= lag) from (select invoice_date, lag
 select t_ok(t_books_agree(), 'Books balance; stock and customer ledgers agree with the books');
 select t_ok((select count(*) from sales_returns where is_demo and status = 'posted') = 2
         and (select count(*) from sales_returns where is_demo and status = 'awaiting_approval') = 1, 'DEMO: two credit notes posted, one return waiting for approval');
-select t_ok(exists (select 1 from customer_refunds where is_demo) and (select count(*) from customer_receipts where is_demo) = 2, 'DEMO receipts and a refund');
+select t_ok(exists (select 1 from customer_refunds where is_demo) and (select count(*) from customer_receipts where is_demo) = 3, 'DEMO receipts and a refund');
+select t_ok((select count(*) from customer_write_offs where is_demo and status = 'posted') = 1
+        and (select count(*) from bad_debt_recoveries where is_demo and status = 'posted') = 1
+        and (select t_book(id, null) from customers where code = 'DEMO-C10') = 0
+        and (select t_free(id) from customers where code = 'DEMO-C10') = 0, 'DEMO: a bad debt written off and ₹1,000 of it recovered');
 select t_ok((select count(*) from screens where code in ('sales', 'invoices', 'customers', 'receipts') and available) = 4, 'Sales, Invoices, Customers and Receipts screens are live');
 select t_ok(not exists (select 1 from stock_moves group by item_id, pack_id having sum(qty_base) < 0), 'No DEMO stock below zero');
 select t_ok((select t_book(id, null) from customers where code = 'DEMO-C06') = 0
@@ -373,10 +377,60 @@ select t_ok((select sum(margin_paise) from rb_sales_summary('2026-11-01', '2026-
 select t_ok((select count(*) from audit_log where action in ('SALE', 'CUSTOMER_RECEIPT', 'SALES_RETURN', 'POST_SALES_RETURN', 'CUSTOMER_REFUND', 'CANCEL_INVOICE')) >= 12,
             'Sales, receipts, returns, refunds and cancellations are in the audit log');
 
+-- 12b. Bad debts: written off by a Director or the FC, recovered later
+select set_config('request.jwt.claim.sub', :'acc', false);
+select t_err(format($$select rb_write_off_bad_debt(jsonb_build_object('customer_id', %s, 'sale_id', %s, 'write_off_date', '2026-12-31',
+  'amount_paise', 100, 'reason', 'x'))$$, :tr2, (select id from sales where customer_id = (select id from customers where code = 'T-TR2') and status = 'open')),
+  'write off bad debts');
+select set_config('request.jwt.claim.sub', :'dir', false);
+select id as s_bd from sales where customer_id = :tr2 and status = 'open' \gset
+select t_err(format($$select rb_write_off_bad_debt(jsonb_build_object('customer_id', %s, 'sale_id', %s, 'write_off_date', '2026-12-31',
+  'amount_paise', 60000, 'reason', 'Gone'))$$, :tr2, :s_bd), 'only has');
+select t_err(format($$select rb_write_off_bad_debt(jsonb_build_object('customer_id', %s, 'sale_id', %s, 'write_off_date', '2026-12-31',
+  'amount_paise', 50400))$$, :tr2, :s_bd), 'reason');
+select rb_write_off_bad_debt(jsonb_build_object('customer_id', :tr2, 'sale_id', :s_bd, 'write_off_date', '2026-12-31',
+  'amount_paise', 50400, 'reason', 'Shop closed, owner not reachable')) as bd1 \gset
+select t_ok((select write_off_no from customer_write_offs where id = :bd1) = 'TRN-BD/2612/00001', 'Write-off numbered TRN-BD/YYMM/00001 in training');
+select t_ok((select outstanding_paise from sales where id = :s_bd) = 0 and (select written_off_paise from sales where id = :s_bd) = 50400
+        and t_book(:tr2, null) = 0 and t_bal('80080110') = 50400 and t_books_agree(),
+            'The invoice is closed, the customer owes nothing, Bad Debt Write-offs is charged; books agree');
+select t_ok((select over_90_paise from rb_customer_balances('2027-04-15') where code = 'T-TR2') is null, 'A written-off invoice leaves the ageing');
+select t_ok((rb_sale_detail(:s_bd)->'write_offs'->0->>'amount_paise')::bigint = 50400, 'The invoice shows its write-off');
+select t_err(format($$select rb_cancel_sale(%s, '2026-12-31', 'x')$$, :s_bd), 'written off');
+select t_err(format($$select rb_record_bad_debt_recovery(jsonb_build_object('write_off_id', %s, 'recovery_date', '2027-01-05', 'amount_paise', 20000))$$, :bd1),
+  'First enter the money');
+select set_config('request.jwt.claim.sub', :'ar', false);
+select rb_receive_from_customer(jsonb_build_object('customer_id', :tr2, 'receipt_date', '2027-01-05', 'mode', 'bank', 'amount_paise', 20000,
+  'reference', 'Owner paid part')) as rc_bd \gset
+select t_ok((rb_customer_open_items(:tr2)->>'on_account_paise')::bigint = 20000
+        and jsonb_array_length(rb_customer_open_items(:tr2)->'write_offs') = 1, 'The money waits on account; the write-off is listed to recover');
+select set_config('request.jwt.claim.sub', :'dir', false);
+select t_err(format($$select rb_record_bad_debt_recovery(jsonb_build_object('write_off_id', %s, 'recovery_date', '2027-01-05', 'amount_paise', 60000))$$, :bd1),
+  'is still written off');
+select rb_record_bad_debt_recovery(jsonb_build_object('write_off_id', :bd1, 'recovery_date', '2027-01-05', 'amount_paise', 20000,
+  'note', 'Part paid by the owner')) as rv1 \gset
+select t_ok((select recovery_no from bad_debt_recoveries where id = :rv1) = 'TRN-BDR/2701/00001'
+        and t_bal('90010135') = -20000 and t_book(:tr2, null) = 0 and t_free(:tr2) = 0 and t_books_agree(),
+            'Recovery booked as other income; the money on account is used; books agree');
+select t_ok((select left_paise from rb_bad_debts_list() where id = :bd1) = 30400
+        and (select recovered_paise from rb_bad_debts_list() where id = :bd1) = 20000, 'Bad debts list: ₹200 recovered, ₹304 still written off');
+select t_err(format($$select rb_reverse_customer_receipt(%s, '2027-01-06', 'x')$$, :rc_bd), 'Reverse the recovery first');
+select t_err(format($$select rb_reverse_bad_debt(%s, '2027-01-06', 'x')$$, :bd1), 'Reverse the recovery first');
+select t_err(format($$select rb_write_off_bad_debt(jsonb_build_object('customer_id', %s, 'write_off_date', '2027-01-06', 'amount_paise', 100, 'reason', 'x'))$$, :tr2),
+  'earlier balance');
+select rb_reverse_bad_debt_recovery(:rv1, '2027-01-06', 'Entered against the wrong write-off');
+select t_ok(t_bal('90010135') = 0 and t_free(:tr2) = 20000 and t_books_agree(), 'Reversing the recovery puts the money back on account');
+select rb_reverse_bad_debt(:bd1, '2027-01-06', 'Customer has agreed to pay');
+select t_ok((select outstanding_paise from sales where id = :s_bd) = 50400 and (select status from sales where id = :s_bd) = 'open'
+        and t_bal('80080110') = 0 and t_books_agree(), 'Reversing the write-off opens the invoice again');
+select t_ok((select count(*) from audit_log where action in ('BAD_DEBT_WRITE_OFF', 'BAD_DEBT_RECOVERED', 'REVERSE_BAD_DEBT', 'REVERSE_BAD_DEBT_RECOVERY')) >= 4,
+            'Write-offs and recoveries are in the audit log');
+
 -- 13. Remove demo data, then go live
 select rb_remove_demo_data('REMOVE DEMO');
 select t_ok(not exists (select 1 from sales where is_demo) and not exists (select 1 from customer_receipts where is_demo)
-        and not exists (select 1 from sales_returns where is_demo) and not exists (select 1 from customer_refunds where is_demo), 'DEMO sales, receipts, returns and refunds removed');
+        and not exists (select 1 from sales_returns where is_demo) and not exists (select 1 from customer_refunds where is_demo)
+        and not exists (select 1 from customer_write_offs where is_demo), 'DEMO sales, receipts, returns, refunds and bad debts removed');
 select t_ok(t_books_agree(), 'Books still agree without the DEMO data');
 select rb_go_live('2027-04-01', 'GO LIVE');
 select t_ok(not exists (select 1 from sales) and not exists (select 1 from customer_receipts) and not exists (select 1 from stock_moves),

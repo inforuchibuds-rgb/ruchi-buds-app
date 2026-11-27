@@ -1,6 +1,6 @@
 # Ruchi Buds app: Module 5 test checklist
 
-Version 1.0 · 27-Nov-2026
+Version 1.1 · 27-Nov-2026
 
 Tick each line on the real app before signing off module 5. You need DS's login and a second login. Move the module 1 test user to **Staff** for part C and to **Manager** for part D.
 
@@ -42,6 +42,15 @@ Tick each line on the real app before signing off module 5. You need DS's login 
 - [ ] On the walk-in invoice, **Goods returned** for one pouch, thrown away. DS's return posts at once. Press **Refund the customer** and give the money back in cash.
 - [ ] **Cancel invoice** on an invoice with no payments or returns: it stays in the list marked **Cancelled**, and the packs are back in stock. An invoice with a customer receipt set against it cannot be cancelled until that receipt is reversed.
 
+## E2. Bad debts (as DS)
+
+- [ ] **Customer receipts → Bad debts** shows the DEMO write-off for Coastal Delights, with ₹1,000 recovered.
+- [ ] Open an unpaid invoice and press **Write off as bad debt** with a reason. The invoice shows **Closed** and the write-off. The customer's balance drops by that amount.
+- [ ] The Accountant or a Manager does **not** see the **Write off as bad debt** button.
+- [ ] **Receive a payment** from that customer: a blue note says part of their debt is written off. Save the receipt. Then **Bad debts** → tap the write-off → **Book money recovered**. The amount fills in from the money on account.
+- [ ] Try to reverse the write-off: refused until the recovery is reversed. Reverse the recovery, then the write-off: the invoice is owed again.
+- [ ] **Accounts → Trial balance**: Bad Debt Write-offs and Other Non-operating Income show the amounts.
+
 ## F. Customer balances and statements
 
 - [ ] **Customers → Balances and statements**: each customer's balance, split into not yet due, 1–30, 31–60, 61–90 and over 90 days. The total row adds up.
@@ -64,5 +73,5 @@ Tick each line on the real app before signing off module 5. You need DS's login 
 ## I. Learning phase, audit and phone
 
 - [ ] As DS, open an invoice made by someone in their learning phase: **Delete fully (learning phase)** removes it with its stock and journal.
-- [ ] **Audit log** shows the sales, returns, receipts, refunds and shared links with who and when.
+- [ ] **Audit log** shows the sales, returns, receipts, refunds, bad debts and shared links with who and when.
 - [ ] On a phone, make a sale, open an invoice and open a statement.
