@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · shop.js · Version 1.0 · 27-Nov-2026
+// RUCHI BUDS APP · shop.js · Version 1.1 · 27-Nov-2026 (1.1: shop link by email too)
 // Module 10 screen "Online shop orders": the orders from the public shop
 // (check UPI payments and tick Paid, pack, dispatch into an invoice,
 // record cash on delivery, cancel), the products on the shop with Free /
@@ -90,7 +90,7 @@
       cancelled: 'Hello ' + o.cust_name + ', your order ' + o.order_no + ' has been cancelled. ' + (o.receipt_no ? 'Your payment will be refunded.' : ''),
       expired: 'Hello ' + o.cust_name + ', the time to pay for order ' + o.order_no + ' ran out. Please order again here: ' + shopUrl(),
     };
-    return 'https://wa.me/91' + o.cust_phone + '?text=' + encodeURIComponent(t[o.status] || link);
+    return RB.waUrl(o.cust_phone, t[o.status] || link);
   }
 
   function orderModal(o, done) {
@@ -223,7 +223,7 @@
     const chk = (id, v, t) => '<label class="check"><input type="checkbox" id="' + id + '"' + (v ? ' checked' : '') + dis + '> ' + t + '</label>';
     tb.innerHTML = '<div class="card"><h2>The shop link</h2><p>Share this link on WhatsApp and Instagram. Customers need no password.</p>' +
       '<p class="sh-link"><b>' + esc(url) + '</b></p><div class="actions"><button id="ss-copy">Copy the link</button>' +
-      '<a class="btn" target="_blank" rel="noopener" href="https://wa.me/?text=' + encodeURIComponent('Order Ruchi Buds online: ' + url) + '">Share on WhatsApp</a>' +
+      RB.shareButtons({ subject: 'Order Ruchi Buds online', text: 'Order Ruchi Buds online: ' + url }) +
       '<a class="btn" target="_blank" rel="noopener" href="' + esc(url) + '">Open the shop</a></div>' +
       '<p>The shop is <b>' + (s.shop_open ? 'open' : 'closed') + '</b>.</p></div>' +
       (can ? '' : '<div class="msg info">Only a Director or the FC can change the shop set-up.</div>') +

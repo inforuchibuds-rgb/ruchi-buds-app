@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · invoices.js · Version 1.2 · 27-Nov-2026
+// RUCHI BUDS APP · invoices.js · Version 1.3 · 27-Nov-2026 (1.3: share invoices, statements and receipts by WhatsApp or email)
 // Module 5 screens "Invoices", "Receipts" and the money side of
 // "Customers": the printable invoice (Print / Save as PDF), returns and
 // credit notes from an invoice, receiving money and setting it against
@@ -99,6 +99,7 @@
       (RB.has('sales.add') ? '<a class="btn" href="#/sales/new">+ New sale</a>' : '') +
       (x.can.cancel ? '<button class="danger" id="iw-cancel">Cancel invoice</button>' : '') +
       (x.can.delete ? '<button class="danger" id="iw-del">Delete fully (learning phase)</button>' : '') + '</div>' +
+      (s.status !== 'cancelled' ? '<div class="actions no-print" id="iw-share"></div>' : '') +
       '<div class="invoice' + (s.status === 'cancelled' ? ' cancelled' : '') + '">' +
       firmHead(f, { text: tax ? 'TAX INVOICE' : 'INVOICE', gstin: tax }) +
       '<div class="inv-meta"><div><span class="muted">Bill to</span><br><b>' + esc(s.bill_name) + '</b>' +
@@ -146,6 +147,15 @@
       '<p class="muted">Entered by ' + esc(s.entered_by_name || '') + ' on ' + RB.fmtDateTime(s.entered_at) + '.</p></div>';
     const reload = () => RB.route();
     on(body, '#iw-print', () => window.print());
+    const shareBox = $('#iw-share', body);
+    if (shareBox) RB.contactOf('customers', s.customer_id).then((c) => {
+      const text = 'Hello ' + s.bill_name + ', thank you for buying from ' + (f.firm_name || 'Ruchi Buds') + '.\n' +
+        (tax ? 'Tax invoice ' : 'Invoice ') + s.invoice_no + ' dated ' + RB.fmtDate(s.invoice_date) + ': total ' + RB.rupees(s.total_paise) + '.\n' +
+        (owed > 0 ? 'Balance due: ' + RB.rupees(owed) + (s.due_date ? ', by ' + RB.fmtDate(s.due_date) : '') + '.' : 'Paid in full. Thank you!') +
+        (f.phone ? '\nQuestions? Call ' + f.phone + '.' : '');
+      shareBox.innerHTML = RB.shareButtons({ phone: s.bill_phone || c.phone, email: c.email, subject: (tax ? 'Tax invoice ' : 'Invoice ') + s.invoice_no + ' from ' + (f.firm_name || 'Ruchi Buds'), text }) +
+        '<span class="hint">To send the invoice itself, tap Print / Save as PDF first, then attach the PDF in WhatsApp or the email.</span>';
+    });
     on(body, '#iw-ret', () => returnFromInvoice(x, reload));
     on(body, '#iw-recv', () => I.receiveModal({ customer_id: s.customer_id, sale_id: s.id }, reload));
     on(body, '#iw-wo', () => I.writeOffModal({ customer_id: s.customer_id, customer_name: s.bill_name, sale_id: s.id, invoice_no: s.invoice_no, owed }, reload));
@@ -348,11 +358,19 @@
       (r.reference ? ' · ref ' + esc(r.reference) : '') + '</p>' + (r.note ? '<p class="muted">' + esc(r.note) + '</p>' : '') +
       (r.status !== 'posted' ? '<div class="msg info">Reversed.</div>' : '') +
       (!isRef && r.on_account_paise > 0 ? '<p>' + RB.rupees(r.on_account_paise) + ' is on account (not yet set against an invoice).</p>' : '') +
+      (r.status === 'posted' ? '<div class="actions" id="rm-share"></div>' : '') +
       '<div class="actions">' +
       (!isRef && r.status === 'posted' && r.on_account_paise > 0 && RB.has('receipts.add') ? '<button class="primary" id="rm-al">Set against invoices</button>' : '') +
       (r.status === 'posted' && RB.has('power.reverse_entries') ? '<button class="danger" id="rm-rev">Reverse</button>' : '') +
       (!isRef && r.status === 'posted' && RB.has('receipts.delete') ? '<button class="danger" id="rm-del">Delete fully (learning phase)</button>' : '') +
       '<button data-close>Close</button></div>');
+    if (r.status === 'posted') RB.contactOf('customers', r.customer_id).then((c) => {
+      const box = $('#rm-share', m.el); if (!box) return;
+      const what = (isRef ? 'we have refunded ' : 'we have received ') + RB.rupees(r.amount_paise) + ' on ' + RB.fmtDate(r.doc_date) +
+        ' by ' + String(r.mode || '').toUpperCase() + (r.reference ? ' (ref ' + r.reference + ')' : '');
+      box.innerHTML = RB.shareButtons({ phone: c.phone, email: c.email, subject: (isRef ? 'Refund ' : 'Payment receipt ') + r.doc_no + ' from Ruchi Buds',
+        text: 'Hello ' + r.customer_name + ', ' + what + '. ' + (isRef ? 'Refund' : 'Receipt') + ' no. ' + r.doc_no + '.' + (isRef ? '' : ' Thank you!') });
+    });
     on(m.el, '#rm-al', () => { m.close(); I.receiveModal({ allocate: { kind: 'receipt', id: r.id, ref: r.doc_no, left: Number(r.on_account_paise), customer_id: r.customer_id, customer_name: r.customer_name } }, done); });
     on(m.el, '#rm-rev', () => { m.close(); SA().reverseModal('Reverse ' + r.doc_no,
       isRef ? 'The refund is undone in the books: the money counts as still owed to the customer.' : 'The receipt is undone in the books and the invoices it paid are owed again.',
@@ -442,6 +460,10 @@
         const url = I.statementUrl(r.token);
         try { await navigator.clipboard.writeText(url); } catch (e) { /* not allowed: shown below */ }
         RB.modalMsg(m, 'Link copied. Send it to the customer by WhatsApp or email. It works until ' + RB.fmtDate(r.expires_at) + ', with no password: ' + url, true);
+        const c = await RB.contactOf('customers', customerId);
+        $('.m-msg', m.el).insertAdjacentHTML('beforeend', '<div class="actions">' + RB.shareButtons({ phone: c.phone, email: c.email,
+          subject: 'Your statement of account from Ruchi Buds',
+          text: 'Hello ' + name + ', here is your statement of account from Ruchi Buds. It opens without a password until ' + RB.fmtDate(r.expires_at) + ':\n' + url }) + '</div>');
         load();
       } catch (e) { RB.modalMsg(m, e.message); }
     });

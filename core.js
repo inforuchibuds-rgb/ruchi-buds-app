@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.4 · 27-Nov-2026 (1.3: Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out; 1.4: online shop alerts on the home screen)
+// RUCHI BUDS APP · core.js · Version 1.5 · 27-Nov-2026 (1.5: share by WhatsApp or email; 1.3: Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out; 1.4: online shop alerts on the home screen)
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -136,6 +136,29 @@
   };
 
   RB.badge = (cls, text) => '<span class="badge ' + cls + '">' + RB.esc(text) + '</span>';
+
+  // ---------- share by WhatsApp or email (free links, nothing is sent by the app) ----------
+  // An Indian mobile number in any common form (98xxxxxxxx, 098..., +91 98..., 91-98...) becomes 9198xxxxxxxx.
+  RB.waNumber = (phone) => {
+    let d = String(phone || '').replace(/\D/g, '');
+    if (d.length === 11 && d[0] === '0') d = d.slice(1);
+    if (d.length === 10) d = '91' + d;
+    return d.length >= 11 && d.length <= 15 ? d : '';
+  };
+  // With no usable number WhatsApp opens and asks who to send it to.
+  RB.waUrl = (phone, text) => 'https://wa.me/' + RB.waNumber(phone) + '?text=' + encodeURIComponent(text || '');
+  RB.mailUrl = (email, subject, text) => 'mailto:' + encodeURIComponent(String(email || '').trim()).replace(/%40/g, '@') +
+    '?subject=' + encodeURIComponent(subject || '') + '&body=' + encodeURIComponent(text || '');
+  // Two buttons: "Share on WhatsApp" and "Send by email". o = { phone, email, subject, text, label }
+  RB.shareButtons = (o) => '<a class="btn wa no-print" target="_blank" rel="noopener" href="' + RB.esc(RB.waUrl(o.phone, o.text)) + '">' +
+    RB.esc(o.label || 'Share on WhatsApp') + '</a>' +
+    '<a class="btn no-print" href="' + RB.esc(RB.mailUrl(o.email, o.subject, o.text)) + '">' + RB.esc(o.mailLabel || 'Send by email') + '</a>';
+  // Phone and email of a customer or supplier (empty when not on file or not readable).
+  RB.contactOf = async (table, id) => {
+    if (!id) return {};
+    try { return (await RB.select(table, 'phone,email', (q) => q.eq('id', id)))[0] || {}; } catch (e) { return {}; }
+  };
+  RB.appUrl = () => location.href.split('#')[0].replace(/index\.html$/, '');
   RB.demoBadge = (row) => (row && row.is_demo ? ' ' + RB.badge('demo', 'DEMO') : '');
 
   // ---------- start-up ----------
