@@ -23,7 +23,7 @@ Tick each line on the real app before signing off module 1. You need two devices
 - [ ] Their home shows only **Sales** and **Customers** (each marked "Module 5"), plus a learning-phase message with the date in dd-mmm-yyyy.
 - [ ] Their phone cannot open Users, Settings or Audit log (typing `#/users` after the link says "You do not have access").
 - [ ] Open the test user in Users and press **What can they see?**. It matches the previous line.
-- [ ] **Download to Excel** gives a spreadsheet of the users list.
+- [ ] **⬇ Excel** (top right) gives a spreadsheet of the users list.
 - [ ] Sort and filter the list by Category and Status.
 
 ## C. Categories and the tick grid

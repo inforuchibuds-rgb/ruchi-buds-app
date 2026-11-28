@@ -58,7 +58,7 @@ const BASE = 'http://localhost:8787/';
   await page.click('.switch button[data-by=customer_kind]'); await page.waitForTimeout(300); await see('Customer type');
   await page.click('.switch button[data-by=d]'); await page.waitForTimeout(300);
   await shot('r02-sales-by-day');
-  const [dl1] = await Promise.all([page.waitForEvent('download'), page.click('#sl-xls')]);
+  const [dl1] = await Promise.all([page.waitForEvent('download'), page.click('#pg-xls')]);
   step('sales report by product, customer type and day; Excel ' + dl1.suggestedFilename());
 
   // Purchases, stock, customers, loans

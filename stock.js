@@ -70,7 +70,7 @@
     tb.insertAdjacentHTML('afterbegin', '<div class="row" style="align-items:flex-end">' +
       '<div class="field" style="flex:0 1 180px"><label for="' + id + '-from">From</label><input type="date" id="' + id + '-from" value="' + from + '"></div>' +
       '<div class="field" style="flex:0 1 180px"><label for="' + id + '-to">To</label><input type="date" id="' + id + '-to" value="' + RB.today() + '"></div>' +
-      '<div class="field" style="flex:0 1 auto"><button id="' + id + '-go">Show</button> <button id="' + id + '-xls">Download to Excel</button></div></div>');
+      '<div class="field" style="flex:0 1 auto"><button id="' + id + '-go">Show</button></div></div>');
     const get = () => [$('#' + id + '-from', tb).value, $('#' + id + '-to', tb).value];
     $('#' + id + '-go', tb).addEventListener('click', () => load(...get()).catch((e) => RB.toast(e.message, true)));
     return get;
@@ -109,7 +109,6 @@
       grid = RB.grid($('#bl-grid', tb), cols, rows);
       grid.on('rowClick', (e, row) => { location.hash = '#/production/' + row.getData().id; });
     });
-    $('#bl-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Production batches'));
     await $('#bl-go', tb).click();
 
   }
@@ -141,7 +140,6 @@
       ], data);
       grid.on('rowClick', (e, row) => { location.hash = '#/production/' + row.getData().batch_id; });
     });
-    $('#yl-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Yield report'));
     await $('#yl-go', tb).click();
   }
 
@@ -159,7 +157,6 @@
         { title: 'Wastage %', field: 'wastage_pct', hozAlign: 'right', headerFilter: false, formatter: (c) => '<b>' + pct(c.getValue()) + '</b>' },
       ], rows);
     });
-    $('#ws-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Wastage by stage'));
     await $('#ws-go', tb).click();
   }
 
@@ -453,16 +450,16 @@
       x.used_in.map((y) => '<tr>' + td('<a href="#/production/' + y.batch_id + '">' + esc(y.batch_no) + '</a>' + (y.status === 'reversed' ? ' ' + RB.badge('inactive', 'Reversed') : '')) +
         td(RB.fmtDate(y.batch_date)) + td(esc(y.product)) + td(S.q(y.qty_base, u), true) + '</tr>')) : '<p class="muted">Not used in a production batch yet.</p>') + '</div>' : '';
 
-    body.innerHTML = '<div class="actions" style="margin:0 0 1rem">' +
+    const tools = $('#page-tools');
+    if (tools) tools.innerHTML =
       (RB.has('production.add') ? '<a class="btn primary" href="#/production/new">+ New batch</a>' : '') +
       (can.reverse ? '<button class="danger" id="bw-rev">Reverse batch</button>' : '') +
-      (can.hard_delete ? '<button class="danger" id="bw-del">Delete fully (learning phase)</button>' : '') +
-      '<button id="bw-print">Print</button></div>' + head + inT + stT + bpT + outT + usedT;
-    on(body, '#bw-print', () => window.print());
-    on(body, '#bw-rev', () => reverseModal('Reverse ' + b.batch_no, 'Its stock and its journal are reversed on the date you choose. ' +
+      (can.hard_delete ? '<button class="danger" id="bw-del">Delete fully (learning phase)</button>' : '');
+    body.innerHTML = head + inT + stT + bpT + outT + usedT;
+    on(document, '#bw-rev', () => reverseModal('Reverse ' + b.batch_no, 'Its stock and its journal are reversed on the date you choose. ' +
       (prep ? 'If any of it went into a production batch, reverse that batch first.' : 'The finished goods must still be in stock.'),
       (dt, why) => RB.rpc('rb_reverse_batch', { p_id: id, p_date: dt, p_reason: why }), () => batchWindow(body, id)));
-    on(body, '#bw-del', async () => {
+    on(document, '#bw-del', async () => {
       if (!(await RB.confirm('Delete this batch fully?', 'Only for entries by someone still in their learning phase. It disappears from stock and the books with no reversal.'))) return;
       try { await RB.rpc('rb_hard_delete_batch', { p_id: id }); RB.toast('Batch deleted'); location.hash = '#/production'; } catch (e) { RB.toast(e.message, true); }
     });
@@ -505,7 +502,7 @@
   function asOf(tb, id, load) {
     tb.insertAdjacentHTML('afterbegin', '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 1 200px"><label for="' + id + '-date">Stock on</label>' +
       '<input type="date" id="' + id + '-date" value="' + RB.today() + '"></div><div class="field" style="flex:0 1 auto"><button id="' + id + '-go">Show</button> ' +
-      '<button id="' + id + '-xls">Download to Excel</button></div></div>');
+      '</div></div>');
     $('#' + id + '-go', tb).addEventListener('click', () => load($('#' + id + '-date', tb).value).catch((e) => RB.toast(e.message, true)));
   }
   const stockCols = (fin) => {
@@ -548,7 +545,6 @@
       ], lots, { rowFormatter: (row) => { if (row.getData().expired) row.getElement().classList.add('row-expired'); } });
       g2.on('rowClick', (e, row) => { if (row.getData().lot_batch_id) location.hash = '#/production/' + row.getData().lot_batch_id; });
     });
-    $('#rw-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Raw and prepared stock'));
     await $('#rw-go', tb).click();
   }
 
@@ -569,7 +565,6 @@
         .map((r) => Object.assign(r, { held: held[r.pack_id] || 0, free: r.packs == null ? null : Math.max(0, Math.floor(Number(r.packs)) - (held[r.pack_id] || 0)) })));
       grid.on('rowClick', (e, row) => movesModal(row.getData()));
     });
-    $('#fn-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Finished goods stock'));
     await $('#fn-go', tb).click();
   }
 
@@ -607,7 +602,7 @@
   async function countsTab(tb) {
     const rows = await RB.rpc('rb_stock_count_list');
     tb.innerHTML = '<p class="muted">Count what is on the shelves; the differences against the books are posted as adjustments once someone other than the counter approves the count. ' +
-      'Opening stock (at go-live) is entered the same way, with its cost.</p><div class="actions" style="margin:0 0 .75rem"><button id="ct-xls">Download to Excel</button></div><div id="ct-grid"></div>';
+      'Opening stock (at go-live) is entered the same way, with its cost.</p><div id="ct-grid"></div>';
     const cols = [
       { title: 'Count', field: 'count_no', width: 190, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
       { title: 'Date', field: 'count_date', width: 115, formatter: (c) => RB.fmtDate(c.getValue()) },
@@ -622,7 +617,6 @@
       { title: 'Over / opening', field: 'excess_paise', hozAlign: 'right', headerFilter: false, formatter: (c) => (Number(c.getValue()) ? money(c.getValue()) : '') });
     const grid = RB.grid($('#ct-grid', tb), cols, rows);
     grid.on('rowClick', (e, row) => countDetail(row.getData().id, () => countsTab(tb)));
-    $('#ct-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Stock counts'));
   }
 
   async function countDetail(id, done) {
@@ -728,7 +722,7 @@
     const rows = await RB.rpc('rb_stock_adjustment_list');
     tb.innerHTML = '<p class="muted">Write-offs take spoilt, expired or damaged stock out at its cost. Write-downs (Accountant, FC or a Director) lower the cost of stock that will sell for less than it cost (AS 2). ' +
       'Both are charged to Inventory Write-down Expense; a Manager\'s write-off waits for approval.</p>' +
-      '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('stock.add') && costOk() ? '<button id="aj-wd">+ Write down</button>' : '') + '<button id="aj-xls">Download to Excel</button></div><div id="aj-grid"></div>';
+      '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('stock.add') && costOk() ? '<button id="aj-wd">+ Write down</button>' : '') + '</div><div id="aj-grid"></div>';
     const cols = [
       { title: 'Number', field: 'adj_no', width: 180, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
       { title: 'Date', field: 'adj_date', width: 115, formatter: (c) => RB.fmtDate(c.getValue()) },
@@ -745,7 +739,6 @@
     const reload = () => adjustTab(tb);
     grid.on('rowClick', (e, row) => adjustDetail(row.getData(), reload));
     on(tb, '#aj-wd', () => adjustModal('write_down', reload));
-    $('#aj-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Write-offs'));
   }
 
   function adjustDetail(a, done) {

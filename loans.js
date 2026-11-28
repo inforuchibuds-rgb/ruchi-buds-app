@@ -98,7 +98,7 @@
   // ===================================================================
   async function summaryTab(tb) {
     tb.innerHTML = '<div class="row" style="align-items:flex-end">' + RB.field('sm-date', 'As at', '<input type="date" id="sm-date" value="' + (L.smDate || RB.today()) + '">') +
-      '<div class="field" style="flex:0 1 auto"><button id="sm-go">Show</button> <button id="sm-xls">Download to Excel</button></div></div><div id="sm-body"></div>';
+      '<div class="field" style="flex:0 1 auto"><button id="sm-go">Show</button></div></div><div id="sm-body"></div>';
     let grid;
     const load = async () => {
       L.smDate = $('#sm-date', tb).value;
@@ -144,7 +144,6 @@
       og.on('rowClick', (e, row) => olWindow(row.getData().id));
     };
     on(tb, '#sm-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#sm-xls', () => grid && RB.downloadExcel(grid, 'Loans and leases'));
     await load();
   }
 

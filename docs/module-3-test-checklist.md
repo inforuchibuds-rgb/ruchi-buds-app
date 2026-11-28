@@ -11,7 +11,7 @@ Tick each line on the real app before signing off module 3. You need DS's login 
 - [ ] Home shows **Purchases**. It opens on a list of 11 DEMO purchases, each with an orange **DEMO** badge.
 - [ ] The filter buttons work: **Direct purchases** shows 4, **With differences** shows 2, **Waiting for approval** shows 1.
 - [ ] Open **DEMO-PO/2611/00002** (glass bottles). The match view shows 12 bottles refused and the bill charging for 500, both in red.
-- [ ] **Download to Excel** gives a file with the list.
+- [ ] **⬇ Excel** (top right) gives a file with the list.
 
 ## B. As AP: order, receive, bill
 

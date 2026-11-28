@@ -85,7 +85,7 @@
 
   SA.dateBar = (tb, id, from, to) => '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 1 180px"><label for="' + id + '-from">From</label><input type="date" id="' + id + '-from" value="' + from + '"></div>' +
     '<div class="field" style="flex:0 1 180px"><label for="' + id + '-to">To</label><input type="date" id="' + id + '-to" value="' + to + '"></div>' +
-    '<div class="field" style="flex:0 1 auto"><button id="' + id + '-go">Show</button> <button id="' + id + '-xls">Download to Excel</button></div></div>';
+    '<div class="field" style="flex:0 1 auto"><button id="' + id + '-go">Show</button></div></div>';
 
   // ---------- sales list (shared with the Invoices screen) ----------
   const FILTERS = [['all', 'All'], ['open', 'Owed'], ['overdue', 'Overdue'], ['credit', 'On credit'], ['cancelled', 'Cancelled']];
@@ -128,14 +128,13 @@
     };
     $$('[data-f]', tb).forEach((b) => b.addEventListener('click', () => grid && apply(b.dataset.f)));
     on(tb, '#sl-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#sl-xls', () => grid && RB.downloadExcel(grid, 'Sales'));
     await load();
   }
 
   // ---------- returns ----------
   async function returnsTab(tb) {
     const rows = await RB.rpc('rb_sales_returns_list');
-    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem"><button id="rt-xls">Download to Excel</button></div>' +
+    tb.innerHTML =
       '<p class="muted">Goods customers brought back. A return made by Staff or Sales waits here until a Manager, the Accountant, the FC or a Director approves it; ' +
       'then its credit note is numbered and the books, stock and the customer balance are updated. To take a new return, open the invoice.</p><div id="rt-grid"></div>';
     const cols = [
@@ -152,7 +151,6 @@
       { title: 'By', field: 'entered_by_name', width: 110 });
     const grid = RB.grid($('#rt-grid', tb), cols, rows);
     grid.on('rowClick', (e, row) => SA.returnModal(row.getData(), () => returnsTab(tb)));
-    on(tb, '#rt-xls', () => RB.downloadExcel(grid, 'Sales returns'));
   }
 
   SA.returnModal = (r, done) => {
@@ -216,7 +214,6 @@
       by = b.dataset.by; $$('#ss-by button', tb).forEach((x) => x.classList.toggle('on', x === b)); draw();
     }));
     on(tb, '#ss-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#ss-xls', () => grid && RB.downloadExcel(grid, 'Sales summary'));
     await load();
   }
 

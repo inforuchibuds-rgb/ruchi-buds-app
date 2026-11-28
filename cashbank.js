@@ -101,7 +101,7 @@
       RB.field('bk-acc', 'Account', RB.sel('bk-acc', bal.map((a) => [a.id, a.name]), (bal.find((a) => a.kind === 'cash') || bal[0] || {}).id)) +
       RB.field('bk-from', 'From', '<input type="date" id="bk-from" value="' + monthStart() + '">') +
       RB.field('bk-to', 'To', '<input type="date" id="bk-to" value="' + RB.today() + '">') +
-      '<div class="field" style="flex:0 1 auto"><button id="bk-go">Show</button> <button id="bk-xls">Download to Excel</button></div></div>' +
+      '<div class="field" style="flex:0 1 auto"><button id="bk-go">Show</button></div></div>' +
       '<div id="bk-head"></div><div id="bk-grid"></div></div>';
     let grid;
     const load = async () => {
@@ -123,7 +123,6 @@
     };
     on(tb, '#bk-go', () => load().catch((e) => RB.toast(e.message, true)));
     on(tb, '#bk-acc', () => load().catch((e) => RB.toast(e.message, true)), 'change');
-    on(tb, '#bk-xls', () => grid && RB.downloadExcel(grid, 'Cash book'));
     if (bal.length) await load();
   }
 
@@ -136,7 +135,7 @@
     tb.innerHTML = '<div class="row" style="align-items:flex-end">' +
       RB.field('ex-from', 'From', '<input type="date" id="ex-from" value="' + monthStart() + '">') +
       RB.field('ex-to', 'To', '<input type="date" id="ex-to" value="' + RB.today() + '">') +
-      '<div class="field" style="flex:0 1 auto"><button id="ex-go">Show</button> <button id="ex-xls">Download to Excel</button></div></div>' +
+      '<div class="field" style="flex:0 1 auto"><button id="ex-go">Show</button></div></div>' +
       '<p class="muted">Everything the business spends that is not stock: rent, gas, wages, repairs, transport and so on. ' +
       (limit != null ? 'Anything above <b>' + RB.rupees(limit) + '</b> waits for approval by the Accountant, the FC or a Director. ' : '') +
       'Tap a line to see it, approve it, pay a bill on credit or reverse it.</p><div id="ex-wait"></div><div id="ex-grid"></div>';
@@ -165,7 +164,6 @@
       grid.on('rowClick', (e, row) => expenseWindow(row.getData().id));
     };
     on(tb, '#ex-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#ex-xls', () => grid && RB.downloadExcel(grid, 'Expenses'));
     await load();
   }
 
@@ -656,7 +654,7 @@
   async function reportTab(tb) {
     tb.innerHTML = '<div class="row" style="align-items:flex-end">' +
       RB.field('rp-from', 'From', '<input type="date" id="rp-from" value="' + monthStart() + '">') + RB.field('rp-to', 'To', '<input type="date" id="rp-to" value="' + RB.today() + '">') +
-      '<div class="field" style="flex:0 1 auto"><button id="rp-go">Show</button> <button id="rp-xls">Download to Excel</button></div></div><div id="rp-grid"></div>';
+      '<div class="field" style="flex:0 1 auto"><button id="rp-go">Show</button></div></div><div id="rp-grid"></div>';
     let grid;
     const load = async () => {
       const rows = await RB.rpc('rb_expense_report', { p_from: $('#rp-from', tb).value, p_to: $('#rp-to', tb).value });
@@ -673,7 +671,6 @@
       ], rows);
     };
     on(tb, '#rp-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#rp-xls', () => grid && RB.downloadExcel(grid, 'Expense report'));
     await load();
   }
 

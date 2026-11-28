@@ -181,7 +181,7 @@
   // ===================================================================
   async function salesTab(tb) {
     tb.innerHTML = '<div id="sl-body"></div>';
-    const read = periodBar(tb, 'sales', { extra: ' <button id="sl-xls">Download to Excel</button>' });
+    const read = periodBar(tb, 'sales');
     const by = R.salesBy || 'item';
     $('#sl-body', tb).insertAdjacentHTML('beforebegin', '<div class="switch">' + [['item', 'By product'], ['d', 'By day'], ['customer_kind', 'By customer type'], ['channel', 'By channel'], ['all', 'Every line']]
       .map(([k, t]) => '<button data-by="' + k + '" class="' + (k === by ? 'on' : '') + '">' + t + '</button>').join('') + '</div>');
@@ -208,13 +208,12 @@
     const load = async () => { const p = read(); rows = await RB.rpc('rb_report_sales', { p_from: p.from, p_to: p.to, p_demo: R.demo }); draw(); };
     $$('.switch button', tb).forEach((b) => b.addEventListener('click', () => { R.salesBy = b.dataset.by; $$('.switch button', tb).forEach((x) => x.classList.toggle('on', x === b)); draw(); }));
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#sl-xls', () => grid && RB.downloadExcel(grid, 'Sales report'));
     await load();
   }
 
   async function purchTab(tb) {
     tb.innerHTML = '<div class="card"><h2>Purchase bills</h2><div id="pu-grid"></div></div><div class="card"><h2>Supplier balances (at the To date)</h2><div id="pu-bal"></div></div>';
-    const read = periodBar(tb, 'purch', { extra: ' <button id="pu-xls">Bills to Excel</button> <button id="pu-xls2">Balances to Excel</button>' });
+    const read = periodBar(tb, 'purch');
     let g1, g2;
     const load = async () => {
       const p = read();
@@ -233,14 +232,12 @@
         { title: 'Oldest bill', field: 'oldest_bill', formatter: (c) => (c.getValue() ? RB.fmtDate(c.getValue()) : '') }], bal.filter((r) => Number(r.balance_paise)));
     };
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#pu-xls', () => g1 && RB.downloadExcel(g1, 'Purchase bills'));
-    on(tb, '#pu-xls2', () => g2 && RB.downloadExcel(g2, 'Supplier balances'));
     await load();
   }
 
   async function stockTab(tb) {
     tb.innerHTML = '<div class="card"><h2>Stock on hand (at the To date)</h2><div id="st-grid"></div></div><div class="card"><h2>Wastage by stage (From to To)</h2><div id="st-waste"></div></div>';
-    const read = periodBar(tb, 'stock', { extra: ' <button id="st-xls">Stock to Excel</button> <button id="st-xls2">Wastage to Excel</button>' });
+    const read = periodBar(tb, 'stock');
     let g1, g2;
     const load = async () => {
       const p = read();
@@ -255,14 +252,12 @@
         { title: 'Wastage %', field: 'wastage_pct', hozAlign: 'right', headerFilter: false, formatter: (c) => (c.getValue() == null ? '' : Number(c.getValue()).toFixed(1) + '%') }], waste);
     };
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#st-xls', () => g1 && RB.downloadExcel(g1, 'Stock on hand'));
-    on(tb, '#st-xls2', () => g2 && RB.downloadExcel(g2, 'Wastage by stage'));
     await load();
   }
 
   async function custTab(tb) {
     tb.innerHTML = '<div id="cu-sum" class="row facts card"></div><div class="card"><h2>What customers owe, by age</h2><div id="cu-grid"></div></div>';
-    const read = periodBar(tb, 'cust', { from: false, extra: ' <button id="cu-xls">Download to Excel</button>' });
+    const read = periodBar(tb, 'cust', { from: false });
     let g;
     const load = async () => {
       const p = read();
@@ -279,14 +274,13 @@
         { title: 'Over limit', field: 'over_limit', formatter: (c) => (c.getValue() ? RB.badge('locked', 'over limit') : '') }], rows);
     };
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#cu-xls', () => g && RB.downloadExcel(g, 'Customer ageing'));
     await load();
   }
 
   async function loansTab(tb) {
     tb.innerHTML = '<div id="lo-sum" class="row facts card"></div><div class="card"><h2>Loans and finance leases</h2><div id="lo-grid"></div></div>' +
       '<div class="card"><h2>Rented premises (operating leases)</h2><div id="lo-ol"></div></div><p class="muted">Payments, schedules and the AS 19 notes are on <a href="#/loans">Loans and leases</a>.</p>';
-    const read = periodBar(tb, 'loans', { from: false, extra: ' <button id="lo-xls">Download to Excel</button>' });
+    const read = periodBar(tb, 'loans', { from: false });
     let g;
     const load = async () => {
       const p = read();
@@ -304,7 +298,6 @@
         money('rent_now_paise', 'Rent now'), money('deposit_paise', 'Deposit held')], x.op_leases.filter((l) => l.status !== 'draft'));
     };
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#lo-xls', () => g && RB.downloadExcel(g, 'Loans and leases'));
     await load();
   }
 
@@ -333,7 +326,7 @@
     tb.innerHTML = '<div class="switch no-print">' + [['bs', 'Balance sheet'], ['pl', 'Profit and loss'], ['cf', 'Cash flow'], ['notes', 'Notes']]
       .map(([k, t]) => '<button data-v="' + k + '" class="' + (k === (R.fsView || 'bs') ? 'on' : '') + '">' + t + '</button>').join('') + '</div><div id="fs-body"></div>';
     if (!R.fs) R.fs = { from: fyStart(today()), to: today() };
-    const read = periodBar(tb, 'fs', { extra: ' <button id="fs-xls">Download to Excel</button> <button id="fs-print">Print</button>' });
+    const read = periodBar(tb, 'fs', { extra: ' <button id="fs-xls">Download to Excel</button>' });
     let F, CFd;
     const draw = () => {
       const v = R.fsView || 'bs', box = $('#fs-body', tb);
@@ -354,7 +347,6 @@
     };
     $$('.switch button', tb).forEach((b) => b.addEventListener('click', () => { R.fsView = b.dataset.v; $$('.switch button', tb).forEach((x) => x.classList.toggle('on', x === b)); if (F) draw(); }));
     on(tb, '#pb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#fs-print', () => window.print());
     on(tb, '#fs-xls', () => {
       const wb = XLSX.utils.book_new(), tmp = document.createElement('div');
       [['Balance sheet', bsTable(F)], ['Profit and loss', plTable(F)], ['Cash flow', cfTable(CFd)], ['Notes', notesTables(F)]].forEach(([n, h]) => {

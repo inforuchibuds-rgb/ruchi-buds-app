@@ -1,5 +1,5 @@
 // =====================================================================
-// RUCHI BUDS APP · core.js · Version 1.5 · 27-Nov-2026 (1.5: share by WhatsApp or email; 1.3: Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out; 1.4: online shop alerts on the home screen)
+// RUCHI BUDS APP · core.js · Version 1.6 · 28-Nov-2026 (1.6: one heading layout on every screen, running line on the yellow strip; 1.5: share by WhatsApp or email; 1.3: Back, Home, Close, Hide, Refresh, Print, Excel, Help, Search, automatic sign-out; 1.4: online shop alerts on the home screen)
 // Sign-in, first-time password set-up, home menu, page routing and the
 // small helpers every other screen file uses (dates, messages, grids).
 // =====================================================================
@@ -282,11 +282,16 @@
       '<button id="btn-search" type="button" title="Find an invoice, purchase, journal, customer or supplier (Ctrl+K)">🔍 <span class="lbl">Search</span></button>' +
       '<button id="btn-hide" type="button" title="Hide the screen (Ctrl+Shift+H)">🙈 <span class="lbl">Hide</span></button>' +
       '<button id="btn-signout" type="button">Sign out</button></header>' +
-      (s.training_mode ? '<div class="training-strip">Training mode: entries made now are cleared at go-live</div>' : '') +
+      '<div id="ticker" class="training-strip ticker" role="marquee" aria-live="off" hidden></div>' +
       '<main id="page">' +
-      (opts && opts.home ? '' : '<div class="page-head"><div class="nav-btns"><button type="button" id="nav-back">‹ Back</button><a class="btn back" href="#/" hidden></a><a class="btn" id="nav-home" href="#/">⌂ Home</a></div><h1>' + RB.esc(title) + '</h1><div id="page-tools" class="actions" style="margin:0"></div>' +
-        '<div class="page-extra"><button type="button" id="pg-refresh" title="Load the figures again">⟳ Refresh</button><button type="button" id="pg-print">🖨 Print</button>' +
-        '<button type="button" id="pg-xls" title="Download the lists and tables on this screen">⬇ Excel</button><button type="button" id="pg-help">? Help</button></div></div>') +
+      // Row 1: Back, Home, the title, and Refresh / Print / Excel / Help on the right.
+      // Row 2 (#page-tools): this screen's own buttons, such as + New or Pay. It hides itself when empty.
+      (opts && opts.home ? '' : '<div class="page-head"><div class="nav-btns"><button type="button" id="nav-back">‹ Back</button><a class="btn back" href="#/" hidden></a><a class="btn" id="nav-home" href="#/">⌂ Home</a></div><h1>' + RB.esc(title) + '</h1>' +
+        '<div class="page-extra"><button type="button" id="pg-refresh" title="Load the figures again" aria-label="Refresh">⟳<span class="lbl"> Refresh</span></button>' +
+        '<button type="button" id="pg-print" title="Print this screen" aria-label="Print">🖨<span class="lbl"> Print</span></button>' +
+        '<button type="button" id="pg-xls" title="Download the lists and tables on this screen" aria-label="Excel">⬇<span class="lbl"> Excel</span></button>' +
+        '<button type="button" id="pg-help" title="Help for this screen" aria-label="Help">?<span class="lbl"> Help</span></button></div>' +
+        '<div id="page-tools" class="actions"></div></div>') +
       '<div id="page-body"></div></main>';
     $('#btn-signout').addEventListener('click', () => RB.signOut());
     $('#btn-hide').addEventListener('click', () => RB.privacy(true));
@@ -297,7 +302,48 @@
     pb('#pg-xls', () => RB.pageExcel(title));
     pb('#pg-help', () => (RB.showHelp ? RB.showHelp() : null));
     if ($('#nav-back')) $('#nav-back').addEventListener('click', RB.goBack);
+    RB.loadTicker();
     return $('#page-body');
+  };
+
+  // ---------- Running line on the yellow strip ----------
+  // Short notices scroll across the strip under the top bar: training mode, plus alerts that other
+  // modules add with RB.tickerSources.push(async () => [{ text, href }]). Alerts are fetched again every
+  // 5 minutes at most. It pauses under the mouse or finger, and stands still for people who turn off motion.
+  RB.tickerSources = [];
+  RB.ticker = { msgs: [], at: 0 };
+  RB.tickerSources.push(async () => {  // backups: shown to people who can see Settings
+    if (!RB.has('settings.view')) return [];
+    const rows = await RB.select('backup_log', 'at,kind,status', (q) => q.in('kind', ['nightly', 'manual']).order('at', { ascending: false }).limit(20));
+    const good = rows.find((r) => r.status === 'ok');
+    if (rows.length && rows[0].status === 'failed') return [{ text: 'The last backup failed. Check Settings, Backups', href: '#/settings' }];
+    if (!good) return rows.length || !(RB.cache.settings || {}).training_mode ? [{ text: 'No good backup yet. Check Settings, Backups', href: '#/settings' }] : [];
+    if (Date.now() - new Date(good.at).getTime() > 36 * 3600 * 1000) return [{ text: 'No backup since ' + RB.fmtDate(good.at) + '. Check Settings, Backups', href: '#/settings' }];
+    return [];
+  });
+  RB.loadTicker = async (force) => {
+    RB.drawTicker();
+    if (!force && Date.now() - RB.ticker.at < 5 * 60 * 1000) return;
+    RB.ticker.at = Date.now();
+    const lists = await Promise.all(RB.tickerSources.map((f) => Promise.resolve().then(f).catch(() => [])));
+    RB.ticker.msgs = [].concat(...lists.map((x) => x || []));
+    RB.drawTicker();
+  };
+  RB.drawTicker = () => {
+    const el = $('#ticker'); if (!el) return;
+    const msgs = ((RB.cache.settings || {}).training_mode ? [{ text: 'Training mode: entries made now are cleared at go-live' }] : []).concat(RB.ticker.msgs);
+    el.hidden = !msgs.length;
+    if (!msgs.length) { el.innerHTML = ''; return; }
+    const one = (m) => (m.href ? '<a href="' + RB.esc(m.href) + '">' + RB.esc(m.text) + '</a>' : '<span>' + RB.esc(m.text) + '</span>');
+    const html = '<div class="ticker-track">' + msgs.map(one).join('<i aria-hidden="true">✦</i>') + '</div>';
+    if (el.innerHTML === html) return;  // keep the line running smoothly when nothing changed
+    el.innerHTML = html;
+    const track = $('.ticker-track', el);
+    // About 60 pixels a second, whatever the screen width and however many notices there are.
+    const secs = Math.max(8, (el.clientWidth + track.scrollWidth) / 60);
+    track.style.animationDuration = secs + 's';
+    // Carry on from where the line was, so moving between screens does not restart it from the right edge.
+    track.style.animationDelay = -((performance.now() / 1000) % secs) + 's';
   };
 
   // ---------- Privacy: blur the screen ----------
