@@ -23,7 +23,7 @@ Home → **Reports**. Only Directors, the FC and the Accountant see it. Each tab
   - **Profit and loss**: revenue, cost of materials, purchases of stock-in-trade, change in inventories, employee costs, finance costs, depreciation and other expenses. It shows how the profit is shared between the partners.
   - **Cash flow** (AS 3, indirect method): operating, investing and financing, agreeing to the cash and bank balances. Non-cash transactions, such as a finance lease starting, are left out and listed below it.
   - **Notes**: every line broken down by account.
-  - **Download to Excel** (one sheet per statement) and **Print**.
+  - **Download to Excel** (one sheet per statement), and **🖨 Print** at the top right.
 - **Statement lines**: which line of the statements each account goes to. A rule covers every account starting with its digits; the longest match wins. The Accountant, the FC and Directors can add a rule, for example if the CA wants an account shown on another line.
 - **Year-end close**: after 31 March, moves the year's profit or loss to the partners' current accounts in the profit-sharing ratio (Settings). The FC or a Director posts it.
 - **Analysis (Looker Studio)**: the Looker Studio report, inside the app. It is fed by the weekly Google Sheets copy and shown only to Google accounts it is shared with.

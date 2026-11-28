@@ -57,7 +57,7 @@
     tb.innerHTML =
       '<div class="actions" style="margin:0 0 .75rem">' +
       (RB.has('users.add') ? '<button class="primary" id="u-add">+ Add user</button>' : '') +
-      '<button id="u-xls">Download to Excel</button></div>' +
+      '</div>' +
       '<p class="muted">Tap a person to see or change their details and access.</p><div id="u-grid"></div>';
     const rows = users.map((u) => Object.assign({}, u, { category: catName[u.category_id] }));
     const grid = RB.grid($('#u-grid', tb), [
@@ -71,7 +71,6 @@
       { title: 'Last sign-in', field: 'last_login_at', formatter: (c) => RB.fmtDateTime(c.getValue()), headerFilter: false },
     ], rows, { selectableRows: false });
     grid.on('rowClick', (e, row) => userModal(row.getData(), cat, () => usersTab(tb)));
-    $('#u-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Users'));
     if ($('#u-add', tb)) $('#u-add', tb).addEventListener('click', () => addUserModal(cat, () => usersTab(tb)));
   }
 
@@ -401,7 +400,7 @@
     body.innerHTML = '<div class="row" style="align-items:flex-end">' +
       '<div class="field"><label>From</label><input type="date" id="al-from"></div>' +
       '<div class="field"><label>To</label><input type="date" id="al-to"></div>' +
-      '<div class="actions" style="margin-bottom:.85rem"><button class="primary" id="al-go">Show</button><button id="al-xls">Download to Excel</button></div></div>' +
+      '<div class="actions" style="margin-bottom:.85rem"><button class="primary" id="al-go">Show</button></div></div>' +
       '<p class="muted">Every change, sign-in and wrong password is kept here. Nobody can edit or delete these lines. Tap a line for full details.</p><div id="al-grid"></div>';
     const d = new Date(); d.setDate(d.getDate() - 30);
     $('#al-from', body).value = d.toISOString().slice(0, 10);
@@ -438,7 +437,6 @@
       });
     };
     $('#al-go', body).addEventListener('click', () => load().catch((e) => RB.toast(e.message, true)));
-    $('#al-xls', body).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Audit log'));
     await load();
   };
 })();

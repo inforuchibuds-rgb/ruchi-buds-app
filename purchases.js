@@ -130,7 +130,7 @@
       type: p.is_direct ? 'Direct' + (p.no_supplier_bill ? ', no bill' : '') : 'Order', status_t: STATUS[p.status],
       owed: p.outstanding_paise, value: p.bill_posted_at ? p.bill_total_paise : (p.is_direct ? null : p.order_total_paise) }));
     tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + FILTERS.map(([k, t]) => '<button data-f="' + k + '"' + (k === (P.filter || 'all') ? ' class="primary"' : '') + '>' + t + '</button>').join('') +
-      '<button id="pl-xls">Download to Excel</button></div>' +
+      '</div>' +
       '<p class="muted">Tap a purchase to open its window: order, goods received and bill side by side, with every difference in red.</p><div id="pl-grid"></div>';
     const grid = RB.grid($('#pl-grid', tb), [
       { title: 'Reference', field: 'ref', width: 170, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
@@ -153,14 +153,13 @@
     grid.on('tableBuilt', () => apply(P.filter || 'all'));
     $$('[data-f]', tb).forEach((b) => b.addEventListener('click', () => apply(b.dataset.f)));
     grid.on('rowClick', (e, row) => open(row.getData().id));
-    $('#pl-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Purchases'));
   }
 
   // ---------- open differences ----------
   async function diffsTab(tb) {
     const rows = await RB.rpc('rb_open_discrepancies');
     tb.innerHTML = '<p class="muted">Every difference between the order, the goods received and the bill, however small, until someone accepts or rejects it. ' +
-      'A purchase with an open difference cannot be paid.</p><div class="actions" style="margin:0 0 .75rem"><button id="df-xls">Download to Excel</button></div><div id="df-grid"></div>';
+      'A purchase with an open difference cannot be paid.</p><div id="df-grid"></div>';
     const grid = RB.grid($('#df-grid', tb), [
       { title: 'Purchase', field: 'purchase_ref', width: 170, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
       { title: 'Supplier', field: 'supplier_name', minWidth: 180 },
@@ -172,7 +171,6 @@
       { title: 'Age (days)', field: 'age_days', hozAlign: 'right', headerFilter: false },
     ], rows.map((r) => Object.assign({}, r, { amount_abs: Math.abs(r.amount_paise) })));
     grid.on('rowClick', (e, row) => open(row.getData().purchase_id));
-    $('#df-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Open purchase differences'));
   }
 
   // ---------- payments ----------
@@ -185,7 +183,7 @@
     const sup = Object.fromEntries(sups.map((s) => [s.id, s.name]));
     const data = rows.map((r) => Object.assign({}, r, { supplier: sup[r.supplier_id], mode_t: MODES[r.mode],
       on_account: r.status === 'posted' ? Number(r.amount_paise) - (used[r.id] || 0) : 0 }));
-    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem"><button id="py-xls">Download to Excel</button></div>' +
+    tb.innerHTML =
       '<p class="muted">"On account" is paid but not yet set against a bill (an advance). Tap a payment to set it against bills or to reverse it.</p><div id="py-grid"></div>';
     const grid = RB.grid($('#py-grid', tb), [
       { title: 'Payment', field: 'payment_no', width: 180, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
@@ -198,7 +196,6 @@
       { title: 'Status', field: 'status', width: 110, formatter: (c) => c.getValue() === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed') },
     ], data);
     grid.on('rowClick', (e, row) => paymentModal(row.getData(), () => paymentsTab(tb)));
-    $('#py-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Supplier payments'));
   }
 
   function paymentModal(pay, done) {
@@ -232,7 +229,7 @@
   // ---------- supplier balances and ledger ----------
   async function balancesTab(tb) {
     tb.innerHTML = '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 1 200px"><label for="sb-date">Balances on</label><input type="date" id="sb-date" value="' + RB.today() + '"></div>' +
-      '<div class="field" style="flex:0 1 auto"><button id="sb-go">Show</button> <button id="sb-xls">Download to Excel</button></div></div>' +
+      '<div class="field" style="flex:0 1 auto"><button id="sb-go">Show</button></div></div>' +
       '<p class="muted">From the books (Trade payables, per supplier). A minus balance means the supplier owes us (an advance or a return). Tap a supplier for their ledger.</p><div id="sb-grid"></div>';
     let grid;
     const load = async () => {
@@ -250,7 +247,6 @@
       grid.on('rowClick', (e, row) => P.ledgerModal(row.getData().supplier_id, row.getData().name));
     };
     $('#sb-go', tb).addEventListener('click', load);
-    $('#sb-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Supplier balances'));
     await load();
   }
 
@@ -291,11 +287,11 @@
       '<div class="field" style="flex:0 1 180px"><label for="rp-to">To</label><input type="date" id="rp-to" value="' + today + '"></div>' +
       '<div class="field" style="flex:0 1 auto"><button id="rp-go">Show</button></div></div>' +
       '<div class="card"><h2>Supplier differences by month</h2><p class="muted">Count and value of short supply, overcharges (rate and tax above the PO) and goods refused at delivery, per supplier.</p>' +
-      '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x1">Download to Excel</button></div><div id="rp-g1"></div></div>' +
+      '<div id="rp-g1"></div></div>' +
       '<div class="card"><h2>Direct purchases by month</h2><p class="muted">Purchases with no PO, for the monthly review.</p>' +
-      '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x2">Download to Excel</button></div><div id="rp-g2"></div></div>' +
+      '<div id="rp-g2"></div></div>' +
       '<div class="card"><h2>Stock bought so far</h2><p class="muted">Quantity and cost of raw materials and packaging from purchases. Production is on the Production screen; sales come with module 5.</p>' +
-      '<div class="actions" style="margin:0 0 .5rem"><button id="rp-x3">Download to Excel</button></div><div id="rp-g3"></div></div>';
+      '<div id="rp-g3"></div></div>';
     const month = (c) => { const v = c.getValue(); return v ? RB.fmtDate(v).slice(3) : ''; };
     let g1, g2, g3;
     const load = async () => {
@@ -333,9 +329,6 @@
       ], r3);
     };
     $('#rp-go', tb).addEventListener('click', () => load().catch((e) => RB.toast(e.message, true)));
-    $('#rp-x1', tb).addEventListener('click', () => g1 && RB.downloadExcel(g1, 'Supplier differences'));
-    $('#rp-x2', tb).addEventListener('click', () => g2 && RB.downloadExcel(g2, 'Direct purchases'));
-    $('#rp-x3', tb).addEventListener('click', () => g3 && RB.downloadExcel(g3, 'Stock bought'));
     await load();
   }
 

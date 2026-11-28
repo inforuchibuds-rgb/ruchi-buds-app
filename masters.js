@@ -81,7 +81,7 @@
     const byId = Object.fromEntries(d.items.map((i) => [i.id, i]));
     tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' +
       (RB.has('masters.add') ? '<button class="primary" id="it-add">+ Add item</button>' : '') +
-      '<button id="it-xls">Download to Excel</button></div>' +
+      '</div>' +
       '<p class="muted">Raw materials, prepared ingredients (work in progress), finished goods, by-products and packaging. Tap an item to see or change it.</p><div id="it-grid"></div>';
     const rows = d.items.map((i) => Object.assign({}, i, {
       kind_t: KINDS[i.kind], stages_t: (i.stages || []).join(' → '),
@@ -102,7 +102,6 @@
       { title: 'Status', field: 'status', formatter: (c) => RB.activeBadge(c.getRow().getData().is_active) },
     ], rows);
     grid.on('rowClick', (e, row) => itemModal(byId[row.getData().id], d, () => itemsTab(tb)));
-    $('#it-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Items'));
     const add = $('#it-add', tb); if (add) add.addEventListener('click', () => itemModal(null, d, () => itemsTab(tb)));
   }
 
@@ -172,7 +171,7 @@
     tb.innerHTML =
       '<section class="card"><h2>Products in packs, with prices</h2>' +
       '<p class="muted">The same bottle can hold different weights of different products. Stock of finished goods is counted in these packs. Trader and online prices are optional; when blank, the retail price is used.</p>' +
-      '<div class="actions" style="margin:0 0 .75rem">' + (add ? '<button class="primary" id="pp-add">+ Add product pack</button>' : '') + '<button id="pp-xls">Download to Excel</button></div><div id="pp-grid"></div></section>' +
+      '<div class="actions" style="margin:0 0 .75rem">' + (add ? '<button class="primary" id="pp-add">+ Add product pack</button>' : '') + '</div><div id="pp-grid"></div></section>' +
       '<section class="card"><h2>Pack types</h2><p class="muted">Bottles and pouches. Link each one to its empty bottle or pouch (a packaging item), so final production can use them up from stock.</p>' +
       '<div class="actions" style="margin:0 0 .75rem">' + (add ? '<button id="pt-add">+ Add pack type</button>' : '') + '</div><div id="pt-grid"></div></section>';
     const ppRows = d.productPacks.map((p) => {
@@ -190,7 +189,6 @@
       { title: 'Status', field: 'is_active', formatter: (c) => RB.activeBadge(c.getValue()), headerFilter: false },
     ], ppRows);
     ppGrid.on('rowClick', (e, row) => productPackModal(d.productPacks.find((x) => x.id === row.getData().id), d, () => packsTab(tb)));
-    $('#pp-xls', tb).addEventListener('click', () => RB.downloadExcel(ppGrid, 'Product packs'));
     const ptRows = d.packTypes.map((p) => Object.assign({}, p, { empty: p.packaging_item_id && item[p.packaging_item_id] ? item[p.packaging_item_id].name : '' }));
     const ptGrid = RB.grid($('#pt-grid', tb), [
       { title: 'Code', field: 'code', width: 90 },
@@ -258,7 +256,7 @@
     const d = await M.load(['departments', 'deptEvents']);
     const byId = Object.fromEntries(d.departments.map((x) => [x.id, x]));
     tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('masters.add') ? '<button class="primary" id="dp-add">+ Add department</button>' : '') +
-      '<button id="dp-xls">Download to Excel</button></div>' +
+      '</div>' +
       '<p class="muted">Every journal line carries a department or cost centre. Renames and merges never rewrite past entries: reports apply them, and each one can be undone. Only a Director or the FC can rename, merge or delete.</p><div id="dp-grid"></div>';
     const rows = d.departments.map((x) => Object.assign({}, x, {
       status: x.merged_into ? 'Merged into ' + (byId[x.merged_into] || {}).code : (x.is_active ? 'Active' : 'Switched off'),
@@ -272,7 +270,6 @@
       { title: 'Renames / merges', field: 'changes', hozAlign: 'right', headerFilter: false },
     ], rows);
     grid.on('rowClick', (e, row) => deptModal(byId[row.getData().id], d, () => deptsTab(tb)));
-    $('#dp-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Departments'));
     const a = $('#dp-add', tb);
     if (a) a.addEventListener('click', () => {
       const m = RB.modal('<h2>Add a department</h2><div class="m-msg"></div><div class="row">' +
@@ -368,8 +365,11 @@
   RB.screens.customers = async (body, arg) => {
     const d = await M.load(['customers']);
     let promoOnly = false;
-    body.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('customers.add') ? '<button class="primary" id="cu-add">+ Add customer</button>' : '') +
-      '<button id="cu-promo">Promotions list</button><button id="cu-xls">Download to Excel</button></div>' +
+    // On its own screen the buttons go in the heading's second row; inside the Customers tab they sit under the tabs.
+    const btns = (RB.has('customers.add') ? '<button class="primary" id="cu-add">+ Add customer</button>' : '') + '<button id="cu-promo">Promotions list</button>';
+    const tools = body.id === 'page-body' && $('#page-tools');
+    if (tools) tools.innerHTML = btns;
+    body.innerHTML = (tools ? '' : '<div class="actions" style="margin:0 0 .75rem">' + btns + '</div>') +
       '<p class="muted">Retail and trader customers. Tap a customer to see or change them. Balances, ledgers and statements are on the Balances and statements tab.</p><div id="cu-grid"></div>';
     const rows = d.customers.map((c) => Object.assign({}, c, { kind_t: CUST_KINDS[c.kind], promo: c.send_promotions ? 'Yes' : '', credit: RB.rupees(c.credit_limit_paise) }));
     const grid = RB.grid($('#cu-grid', body), [
@@ -385,14 +385,13 @@
       { title: 'Status', field: 'is_active', formatter: (c) => RB.activeBadge(c.getValue()), headerFilter: false },
     ], rows);
     grid.on('rowClick', (e, row) => M.customerModal(d.customers.find((x) => x.id === row.getData().id), () => RB.route()));
-    $('#cu-xls', body).addEventListener('click', () => RB.downloadExcel(grid, promoOnly ? 'Promotions list' : 'Customers'));
-    $('#cu-promo', body).addEventListener('click', (e) => {
+    $('#cu-promo').addEventListener('click', (e) => {
       promoOnly = !promoOnly;
       if (promoOnly) grid.setFilter('promo', '=', 'Yes'); else grid.clearFilter();
       e.target.classList.toggle('primary', promoOnly);
       e.target.textContent = promoOnly ? 'Show everyone' : 'Promotions list';
     });
-    const a = $('#cu-add', body); if (a) a.addEventListener('click', () => M.customerModal(null, () => RB.route()));
+    const a = $('#cu-add'); if (a) a.addEventListener('click', () => M.customerModal(null, () => RB.route()));
     const pick = arg && d.customers.find((x) => String(x.id) === String(arg));  // from Quick search
     if (pick) M.customerModal(pick, () => RB.route());
   };
@@ -453,8 +452,9 @@
     if (RB.purchases && (RB.has('purchases.view') || RB.has('suppliers.view'))) {
       try { (await RB.rpc('rb_supplier_balances', { p_as_of: RB.today() })).forEach((b) => { owed[b.supplier_id] = b.balance_paise; }); } catch (e) { /* balances are optional here */ }
     }
-    body.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (RB.has('suppliers.add') ? '<button class="primary" id="su-add">+ Add supplier</button>' : '') +
-      '<button id="su-xls">Download to Excel</button></div>' +
+    const tools = $('#page-tools');
+    if (tools) tools.innerHTML = RB.has('suppliers.add') ? '<button class="primary" id="su-add">+ Add supplier</button>' : '';
+    body.innerHTML =
       '<p class="muted">Fishermen, farmers, local shops and companies. Tap a supplier to see or change them, or to open their ledger. Purchases and payments are in the Purchases screen.</p><div id="su-grid"></div>';
     const rows = d.suppliers.map((s) => Object.assign({}, s, { kind_t: SUP_KINDS[s.kind], nobill: s.usually_no_bill ? 'No bill' : '', owed: owed[s.id] == null ? null : owed[s.id] }));
     const grid = RB.grid($('#su-grid', body), [
@@ -469,8 +469,7 @@
       { title: 'Status', field: 'is_active', formatter: (c) => RB.activeBadge(c.getValue()), headerFilter: false },
     ], rows);
     grid.on('rowClick', (e, row) => M.supplierModal(d.suppliers.find((x) => x.id === row.getData().id), () => RB.route()));
-    $('#su-xls', body).addEventListener('click', () => RB.downloadExcel(grid, 'Suppliers'));
-    const a = $('#su-add', body); if (a) a.addEventListener('click', () => M.supplierModal(null, () => RB.route()));
+    const a = $('#su-add'); if (a) a.addEventListener('click', () => M.supplierModal(null, () => RB.route()));
     const pick = arg && d.suppliers.find((x) => String(x.id) === String(arg));  // from Quick search
     if (pick) M.supplierModal(pick, () => RB.route());
   };

@@ -16,7 +16,7 @@ Tick each line on the real app before signing off module 8. You need DS's login,
 - [ ] Home shows **Reports**. The **Dashboard** opens.
 - [ ] Set **As at** to 30-Nov-2026, tick **Include DEMO entries** and press **Show**. Sales this month ₹19,890.00, gross margin ₹9,103.27 (45.8% of sales), cash and bank ₹43,339.00.
 - [ ] Point at (or tap) the November bar in "Sales and margin, last 12 months": it shows the sales and the margin. The top products and sales by customer type show.
-- [ ] **Sales**, 01-Nov-2026 to 30-Nov-2026: the product rows add up to ₹19,890.00. **By day**, **By customer type** and **By channel** regroup them. **Download to Excel** gives a file.
+- [ ] **Sales**, 01-Nov-2026 to 30-Nov-2026: the product rows add up to ₹19,890.00. **By day**, **By customer type** and **By channel** regroup them. **⬇ Excel** (top right) gives a file.
 - [ ] **Purchases**, **Stock**, **Customers** and **Loans and leases** each show their figures without an error. Loans and leases lists DEMO-LN-001.
 
 ## B. Financial statements
@@ -26,7 +26,7 @@ Tick each line on the real app before signing off module 8. You need DS's login,
 - [ ] **Cash flow**: the cash at the end of the period is ₹43,339.00, the same as cash and bank on the balance sheet. The note below lists the van lease (₹2,40,000.00) as a non-cash transaction.
 - [ ] **Notes**: each line is broken down by account.
 - [ ] **Accounts → Trial balance** on 30-Nov-2026: cash and bank, trade payables and the loan accounts agree with the balance sheet notes.
-- [ ] **Download to Excel** gives one sheet per statement. **Print** shows only the statement.
+- [ ] **Download to Excel** gives one sheet per statement. **🖨 Print** (top right) shows only the statement.
 - [ ] Untick DEMO and press **Show**: the statements still balance (they may be nil).
 
 ## C. Statement lines

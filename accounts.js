@@ -66,7 +66,7 @@
     tb.innerHTML = '<div class="row" style="align-items:flex-end">' +
       RB.field('jl-from', 'From', '<input type="date" id="jl-from">') + RB.field('jl-to', 'To', '<input type="date" id="jl-to">') +
       '<div class="actions" style="margin-bottom:.85rem">' + (RB.has('accounts.add') ? '<button class="primary" id="jl-new">+ New journal</button>' : '') +
-      '<button id="jl-xls">Download to Excel</button></div></div>' +
+      '</div></div>' +
       '<p class="muted">Journals from every module land here. A manual journal is saved as a <b>draft</b>, then posted by someone with approval rights' +
       (L.settings.manual_journal_second_person ? ' other than the person who entered it' : '') + '. Posted journals are never edited: reverse them instead.</p><div id="jl-grid"></div>';
     $('#jl-from', tb).value = fyStart(RB.today()); $('#jl-to', tb).value = RB.today().slice(0, 8) + '31';
@@ -93,7 +93,6 @@
       grid.on('rowClick', (e, row) => journalModal(row.getData().id, load));
     };
     $('#jl-from', tb).addEventListener('change', load); $('#jl-to', tb).addEventListener('change', load);
-    $('#jl-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Journals'));
     const n = $('#jl-new', tb); if (n) n.addEventListener('click', () => journalEditor(null, load));
     await load();
   }
@@ -277,7 +276,7 @@
       RB.field('tb-from', 'From', '<input type="date" id="tb-from">') + RB.field('tb-to', 'To', '<input type="date" id="tb-to">') +
       RB.field('tb-dept', 'Department', RB.sel('tb-dept', [['', 'All departments']].concat(L.departments.filter((d) => !d.merged_into).map((d) => [d.id, d.code + ' ' + d.name])), '')) +
       '<div class="field"><label>&nbsp;</label><label class="check"><input type="checkbox" id="tb-demo" checked> Include DEMO entries</label></div>' +
-      '<div class="actions" style="margin-bottom:.85rem"><button class="primary" id="tb-go">Show</button><button id="tb-xls">Download to Excel</button></div></div>' +
+      '<div class="actions" style="margin-bottom:.85rem"><button class="primary" id="tb-go">Show</button></div></div>' +
       '<div id="tb-sum"></div><div id="tb-grid"></div>' +
       '<p class="muted">Balances from posted journals. Profit and loss accounts start each financial year (April) at zero; earlier years\' profit shows in Retained Earnings until the year-end close in module 8. Tap an account for its ledger.</p>';
     $('#tb-from', tb).value = fyStart(RB.today()); $('#tb-to', tb).value = RB.today();
@@ -307,7 +306,6 @@
       grid.on('rowClick', (e, row) => show('ledger', { account: row.getData().account_code, from: $('#tb-from', tb).value, to: $('#tb-to', tb).value }));
     };
     $('#tb-go', tb).addEventListener('click', () => load().catch((e) => RB.toast(e.message, true)));
-    $('#tb-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Trial balance'));
     await load();
   }
 
@@ -321,7 +319,7 @@
       '<div class="row" style="align-items:flex-end">' + RB.field('lg-acc', 'Account', '<input id="lg-acc" list="lg-accounts" placeholder="type a code or name">') +
       RB.field('lg-from', 'From', '<input type="date" id="lg-from">') + RB.field('lg-to', 'To', '<input type="date" id="lg-to">') + '</div>' +
       '<div class="row" style="align-items:flex-end" id="lg-party"></div>' +
-      '<div class="actions" style="margin:0 0 .75rem"><button class="primary" id="lg-go">Show</button><button id="lg-xls">Download to Excel</button></div><div id="lg-grid"></div>';
+      '<div class="actions" style="margin:0 0 .75rem"><button class="primary" id="lg-go">Show</button></div><div id="lg-grid"></div>';
     $('#lg-from', tb).value = (arg && arg.from) || fyStart(RB.today()); $('#lg-to', tb).value = (arg && arg.to) || RB.today();
     if (arg && arg.account) $('#lg-acc', tb).value = accName(L.acc[arg.account]);
     const code = () => ($('#lg-acc', tb).value.match(/^\s*(\d{8})/) || [])[1];
@@ -358,7 +356,6 @@
       grid.on('rowClick', (e, row) => { const id = row.getData().journal_id; if (id) journalModal(id, load); });
     };
     $('#lg-go', tb).addEventListener('click', () => load().catch((e) => RB.toast(e.message, true)));
-    $('#lg-xls', tb).addEventListener('click', () => grid && RB.downloadExcel(grid, 'Ledger ' + (code() || '')));
     if (arg && arg.account) await load();
   }
 
@@ -371,7 +368,7 @@
     tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' +
       '<label class="check" style="margin-right:1rem"><input type="checkbox" id="co-hidden"> Show accounts hidden for Ruchi Buds</label>' +
       (edit ? '<button id="co-add">+ Add a Ruchi Buds account</button><label class="btn" for="co-file" style="margin:0">Import Master COA workbook…</label><input id="co-file" type="file" accept=".xlsx,.xls,.csv" class="hidden">' : '') +
-      '<button id="co-xls">Download to Excel</button></div><div id="co-msg"></div>' +
+      '</div><div id="co-msg"></div>' +
       '<p class="muted">The group\'s Master chart of accounts (8 digits: class, group, family, detail). Family codes ending 00 are headers and cannot be posted to. ' +
       'Accounts that exist only under IFRS (right-of-use assets, expected credit loss, contract assets, OCI reserves, share capital) and consolidation-only accounts are hidden, because Ruchi Buds reports under Indian AS. ' +
       'Each account has a cash-flow category, used for the AS 3 cash flow statement. Tap an account to change it.</p><div id="co-grid"></div>';
@@ -394,7 +391,6 @@
     grid.on('tableBuilt', applyHidden);
     $('#co-hidden', tb).addEventListener('change', applyHidden);
     grid.on('rowClick', (e, row) => accountModal(L.acc[row.getData().code], () => coaTab(tb)));
-    $('#co-xls', tb).addEventListener('click', () => RB.downloadExcel(grid, 'Chart of accounts'));
     if (!edit) return;
     $('#co-add', tb).addEventListener('click', () => {
       const m = RB.modal('<h2>Add a Ruchi Buds account</h2><div class="m-msg"></div>' +

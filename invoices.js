@@ -334,7 +334,7 @@
 
   async function receiptsTab(tb) {
     const rows = await RB.rpc('rb_customer_receipts_list');
-    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem"><button id="rl-xls">Download to Excel</button></div>' +
+    tb.innerHTML =
       '<p class="muted">Money in from customers, and refunds paid back. "On account" is received but not yet set against an invoice. Tap a row to set it against invoices or reverse it.</p><div id="rl-grid"></div>';
     const grid = RB.grid($('#rl-grid', tb), [
       { title: 'Document', field: 'doc_no', width: 190, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
@@ -348,7 +348,6 @@
       { title: 'Status', field: 'status', width: 110, formatter: (c) => (c.getValue() === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) },
     ], rows);
     grid.on('rowClick', (e, row) => receiptModal(row.getData(), () => receiptsTab(tb)));
-    on(tb, '#rl-xls', () => RB.downloadExcel(grid, 'Customer receipts'));
   }
 
   function receiptModal(r, done) {
@@ -384,7 +383,7 @@
   // ---------- customer balances with ageing (Receipts and Customers) ----------
   I.balancesTab = async (tb) => {
     tb.innerHTML = '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 1 200px"><label for="cb-date">Balances on</label><input type="date" id="cb-date" value="' + RB.today() + '"></div>' +
-      '<div class="field" style="flex:0 1 auto"><button id="cb-go">Show</button> <button id="cb-xls">Download to Excel</button></div></div>' +
+      '<div class="field" style="flex:0 1 auto"><button id="cb-go">Show</button></div></div>' +
       '<p class="muted">From the books (Trade receivables, per customer). Overdue is counted from each invoice\'s due date. A minus balance means we owe the customer (an advance or a credit note). Tap a customer for their ledger and statement.</p><div id="cb-grid"></div>';
     let grid;
     const load = async () => {
@@ -407,7 +406,6 @@
       grid.on('rowClick', (e, row) => I.statementModal(row.getData().customer_id, row.getData().name));
     };
     on(tb, '#cb-go', () => load().catch((e) => RB.toast(e.message, true)));
-    on(tb, '#cb-xls', () => grid && RB.downloadExcel(grid, 'Customer balances'));
     await load();
   };
 
@@ -495,7 +493,7 @@
   async function badDebtsTab(tb) {
     const rows = await RB.rpc('rb_bad_debts_list');
     const can = RB.has('power.write_off_debts');
-    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (can ? '<button id="bd-new">Write off an earlier balance</button>' : '') + '<button id="bd-xls">Download to Excel</button></div>' +
+    tb.innerHTML = '<div class="actions" style="margin:0 0 .75rem">' + (can ? '<button id="bd-new">Write off an earlier balance</button>' : '') + '</div>' +
       '<p class="muted">Money a customer will not pay, taken off their balance and charged to Bad Debt Write-offs. To write off an invoice, open it and press <b>Write off as bad debt</b>. ' +
       'If the customer pays later, first enter the money as a receipt, then tap the write-off here and press <b>Book money recovered</b> (it counts as other income).</p><div id="bd-grid"></div>';
     const grid = RB.grid($('#bd-grid', tb), [
@@ -509,7 +507,6 @@
       { title: 'Status', field: 'status', width: 110, formatter: (c) => (c.getValue() === 'posted' ? RB.badge('active', 'Posted') : RB.badge('inactive', 'Reversed')) },
     ], rows);
     grid.on('rowClick', (e, row) => I.badDebtModal(row.getData(), () => badDebtsTab(tb)));
-    on(tb, '#bd-xls', () => RB.downloadExcel(grid, 'Bad debts'));
     on(tb, '#bd-new', () => I.writeOffModal({}, () => badDebtsTab(tb)));
   }
 

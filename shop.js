@@ -56,7 +56,7 @@
       (S.filter === 'open' ? '' : '<div class="row" style="align-items:flex-end"><div class="field" style="flex:0 1 180px"><label for="so-from">From</label><input type="date" id="so-from" value="' + (S.from || monthStart()) + '"></div>' +
         '<div class="field" style="flex:0 1 180px"><label for="so-to">To</label><input type="date" id="so-to" value="' + (S.to || RB.today()) + '"></div>' +
         '<div class="field" style="flex:0 1 auto"><button id="so-go">Show</button></div></div>') +
-      '<div class="actions" style="margin:0 0 .5rem"><button id="so-refresh">Refresh</button><button id="so-xls">Download to Excel</button></div>' +
+      '<div class="actions" style="margin:0 0 .5rem"><button id="so-refresh">Refresh</button></div>' +
       '<p class="muted">Tap an order to check the payment, pack it, dispatch it (it becomes an invoice) or cancel it.</p><div id="so-grid"></div>';
     const grid = RB.grid($('#so-grid', tb), [
       { title: 'Order', field: 'order_no', width: 170, formatter: (c) => '<b>' + esc(c.getValue()) + '</b>' + RB.demoBadge(c.getRow().getData()) },
@@ -74,7 +74,6 @@
     $$('#so-filter button', tb).forEach((b) => b.addEventListener('click', () => { S.filter = b.dataset.f; ordersTab(tb).catch((x) => RB.toast(x.message, true)); }));
     on(tb, '#so-go', () => { S.from = $('#so-from', tb).value; S.to = $('#so-to', tb).value; ordersTab(tb).catch((x) => RB.toast(x.message, true)); });
     on(tb, '#so-refresh', () => ordersTab(tb).catch((x) => RB.toast(x.message, true)));
-    on(tb, '#so-xls', () => RB.downloadExcel(grid, 'Online orders'));
   }
 
   function waText(o) {
@@ -158,7 +157,7 @@
     const rows = await RB.rpc('rb_shop_products');
     tb.innerHTML = '<p class="muted">Every finished-goods pack. <b>On hold</b> = packs in online orders not yet dispatched: they cannot be sold at the counter. ' +
       (setup() ? 'Tap a pack to put it on the shop, hide it, add a photo or allow cash on delivery.' : 'A Director or the FC chooses which packs appear on the shop.') + '</p>' +
-      '<div class="actions" style="margin:0 0 .5rem"><button id="sp-xls">Download to Excel</button></div><div id="sp-grid"></div>';
+      '<div id="sp-grid"></div>';
     const grid = RB.grid($('#sp-grid', tb), [
       { title: 'Photo', field: 'photo', width: 84, headerFilter: false, formatter: (c) => (c.getValue() ? '<img class="sh-photo" src="' + esc(c.getValue()) + '" alt="">' : '') },
       { title: 'Product', field: 'name', minWidth: 180, formatter: (c) => esc(c.getValue()) + RB.demoBadge(c.getRow().getData()) },
@@ -171,7 +170,6 @@
       { title: 'Total', field: 'total', hozAlign: 'right', headerFilter: false },
     ], rows.map((r) => Object.assign({}, r, { photo: r.photo })));
     if (setup()) grid.on('rowClick', (e, row) => productModal(row.getData(), () => productsTab(tb)));
-    on(tb, '#sp-xls', () => RB.downloadExcel(grid, 'Online shop products'));
   }
 
   // A photo from the phone or computer, made small (600 px, JPEG) so the shop page loads fast.
@@ -310,8 +308,8 @@
         '<div><small>Paid by UPI</small><b>' + money(t.upi_paise) + '</b><small>' + t.upi_orders + ' orders</small></div>' +
         '<div><small>Cash on delivery</small><b>' + money(t.cod_paise) + '</b><small>' + t.cod_orders + ' orders</small></div>' +
         '<div><small>Cancelled</small><b>' + t.cancelled + '</b><small>' + money(t.cancelled_paise) + '; ' + t.expired + ' not paid in time</small></div></div>' +
-        '<div class="card"><h2>By day</h2><div class="actions" style="margin:0 0 .5rem"><button id="sr-dx">Download to Excel</button></div><div id="sr-day"></div></div>' +
-        '<div class="card"><h2>By product</h2><div class="actions" style="margin:0 0 .5rem"><button id="sr-px">Download to Excel</button></div><div id="sr-prod"></div></div>';
+        '<div class="card"><h2>By day</h2><div id="sr-day"></div></div>' +
+        '<div class="card"><h2>By product</h2><div id="sr-prod"></div></div>';
       const g1 = RB.grid($('#sr-day', box), [
         { title: 'Day', field: 'day', width: 130, formatter: (c) => RB.fmtDate(c.getValue()) },
         { title: 'Orders', field: 'orders', hozAlign: 'right', headerFilter: false },
@@ -327,8 +325,6 @@
         { title: 'Orders', field: 'orders', hozAlign: 'right', headerFilter: false },
         { title: 'Value', field: 'value_paise', hozAlign: 'right', headerFilter: false, formatter: (c) => money(c.getValue()) },
       ], r.by_product);
-      on(box, '#sr-dx', () => RB.downloadExcel(g1, 'Online orders by day'));
-      on(box, '#sr-px', () => RB.downloadExcel(g2, 'Online orders by product'));
     };
     on(tb, '#sr-go', () => load().catch((e) => RB.toast(e.message, true)));
     await load();
@@ -360,4 +356,12 @@
     }
   };
   setInterval(() => { if (RB.profile && !document.hidden) RB.shopAlerts(false); }, 60000);
+  // Online shop work waiting, on the running line under the top bar.
+  if (RB.tickerSources) RB.tickerSources.push(async () => {
+    if (!RB.has('shop.view')) return [];
+    const a = await RB.rpc('rb_shop_my_alerts'); if (!a) return [];
+    const t = [a.to_check ? a.to_check + ' UPI payment' + (a.to_check > 1 ? 's' : '') + ' to check' : '', a.to_pack ? a.to_pack + ' to pack' : '',
+      a.to_dispatch ? a.to_dispatch + ' to dispatch' : '', a.cash_due ? a.cash_due + ' cash on delivery to collect' : ''].filter(Boolean).join(', ');
+    return t ? [{ text: 'Online shop: ' + t, href: '#/shop' }] : [];
+  });
 })();
